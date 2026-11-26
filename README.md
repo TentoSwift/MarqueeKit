@@ -1,8 +1,8 @@
 # WidgetMarquee
 
-iPhoneのホーム画面Widgetで、1行に収まらない文字列を左に送り、末尾から先頭に戻って繰り返すSwift Packageです。SwiftUIとWidgetKitの公開APIを使用します。対応はiOS 17以降、Swift tools 5.9以降です。
+iPhoneのホーム画面Widgetで、1行に収まらない文字列を自動で左に送り、末尾から先頭に戻って繰り返すSwift Packageです。ホーム画面にWidgetを追加するだけで動きます。SwiftUIとWidgetKitの公開APIを使用します。対応はiOS 17以降、Swift tools 5.9以降です。
 
-![ホーム画面で位置が11から12、1へ進み、ENDの後にSTARTが続く様子](Documentation/loop.png)
+![ホーム画面で位置が12から1に戻り、ENDの後にSTARTが続く様子を2周分撮影](Documentation/loop.png)
 
 ## インストール
 
@@ -44,7 +44,7 @@ WidgetMarquee(entry.headline, date: entry.date, schedule: schedule)
 
 ## 周期と更新
 
-既定では2秒ごとに12の表示位置を順に使い、約24秒で一周します。`WidgetMarqueeSchedule(stepsPerPass: 30)` にすると、一周は約60秒です。長い文字列では、1回の移動距離が表示幅を超えないように段階数を増やすと、途中の文字も読めます。`schedule.phase(at: entry.date)` は現在位置を0始まりで返します。
+既定では2秒ごとに12の表示位置を順に使い、約24秒で一周します。`stepsPerPass` には2〜3,600を指定できます。たとえば `WidgetMarqueeSchedule(stepsPerPass: 30)` にすると、一周は約60秒です。長い文字列では、1回の移動距離が表示幅を超えないように段階数を増やすと、途中の文字も読めます。`schedule.phase(at: entry.date)` は現在位置を0始まりで返します。
 
 スケジュールは5分ぶんの151エントリをまとめて返し、4分後の再読み込みをWidgetKitに依頼します。各位置は絶対時刻に対応するため、次のタイムラインでも続きから表示できます。iOS 27.2のiPhone 17 Proシミュレータでは、操作せずに複数回折り返し、最初の5分を超えても次のタイムラインで更新が続くことを確認しました。
 
