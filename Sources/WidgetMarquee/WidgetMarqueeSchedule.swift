@@ -21,6 +21,10 @@ public struct WidgetMarqueeSchedule: Sendable {
         self.stepsPerPass = stepsPerPass
     }
 
+    init(for text: String) {
+        self.init(stepsPerPass: min(3_600, max(12, text.count / 8)))
+    }
+
     /// Returns the zero-based position within a pass at the supplied date.
     ///
     /// The position follows wall time, so replacing a timeline preserves its phase.

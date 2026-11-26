@@ -5,10 +5,6 @@ import WidgetMarquee
 
 private let sampleHeadline = "START  ·  東京  →  名古屋  →  京都  →  大阪  →  広島  →  博多  ·  END"
 
-private func schedule(for headline: String) -> WidgetMarqueeSchedule {
-    WidgetMarqueeSchedule(stepsPerPass: min(3_600, max(12, headline.count / 8)))
-}
-
 struct HeadlineConfiguration: WidgetConfigurationIntent {
     static var title: LocalizedStringResource { "見出しの設定" }
 
@@ -23,25 +19,17 @@ struct HeadlineConfiguration: WidgetConfigurationIntent {
     }
 }
 
-private struct HeadlineEntry: TimelineEntry {
-    let date: Date
-    let headline: String
-}
-
 private struct HeadlineProvider: AppIntentTimelineProvider {
-    func placeholder(in context: Context) -> HeadlineEntry {
-        HeadlineEntry(date: .now, headline: sampleHeadline)
+    func placeholder(in context: Context) -> WidgetMarqueeEntry {
+        WidgetMarqueeEntry(sampleHeadline)
     }
 
-    func snapshot(for configuration: HeadlineConfiguration, in context: Context) async -> HeadlineEntry {
-        HeadlineEntry(date: .now, headline: configuration.headline)
+    func snapshot(for configuration: HeadlineConfiguration, in context: Context) async -> WidgetMarqueeEntry {
+        WidgetMarqueeEntry(configuration.headline)
     }
 
-    func timeline(for configuration: HeadlineConfiguration, in context: Context) async -> Timeline<HeadlineEntry> {
-        let headline = configuration.headline
-        return schedule(for: headline).timeline(from: .now) { date in
-            HeadlineEntry(date: date, headline: headline)
-        }
+    func timeline(for configuration: HeadlineConfiguration, in context: Context) async -> Timeline<WidgetMarqueeEntry> {
+        WidgetMarquee.timeline(for: configuration.headline)
     }
 }
 
@@ -49,7 +37,7 @@ private struct HeadlineProvider: AppIntentTimelineProvider {
 struct HeadlineWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "HeadlineWidget", intent: HeadlineConfiguration.self, provider: HeadlineProvider()) { entry in
-            WidgetMarquee(entry.headline, date: entry.date, schedule: schedule(for: entry.headline))
+            WidgetMarquee(entry)
                 .containerBackground(.background, for: .widget)
         }
         .configurationDisplayName("Headline")
