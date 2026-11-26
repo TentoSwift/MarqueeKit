@@ -6,41 +6,42 @@ iPhoneのホーム画面Widgetで、1行に収まらない文字列を自動で�
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.0.0` 以降の製品 `WidgetMarquee` をWidget Extensionターゲットに追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.0.1` 以降の製品 `WidgetMarquee` をWidget Extensionターゲットに追加します。
 
 `Package.swift` から追加する場合は、`dependencies` に次の行を指定します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.0.0")
+.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.0.1")
 ```
 
-## 組み込み
+## 好きな文章を表示する
 
-タイムラインプロバイダとビューで同じスケジュールを使います。既存の `TimelineEntry` に、クロージャが受け取った日時をそのまま保存してください。
+1. [HeadlineWidget.swift](Examples/HeadlineWidget.swift) をWidget Extensionターゲットに追加し、テンプレートの `@main` をこのサンプルに置き換えます。
+2. アプリを実行し、iPhoneのホーム画面に中サイズの「Headline」を追加します。
+3. Widgetを長押しして「ウィジェットを編集」を開き、「テキスト」に好きな文章を入力します。編集を閉じると、その文章で表示が始まります。
+
+文章はWidgetごとに設定できます。空欄や空白だけの入力には見本の文章を表示します。1行に収まる短い文章は静止し、長い文章は自動で横に流れます。
+
+## 自分のWidgetに組み込む
+
+表示したい `String` とエントリの日時を `WidgetMarquee` に渡します。次の例はWidgetの編集画面で設定した文章を `AppIntentTimelineProvider` からビューへ渡します。`schedule(for:)` は文章の長さに合わせて一周の段階数を増やします。プロバイダとビューで同じ設定を使ってください。[設定とプロバイダの全コード](Examples/HeadlineWidget.swift)
 
 ```swift
-import SwiftUI
-import WidgetKit
-import WidgetMarquee
-
-private let schedule = WidgetMarqueeSchedule()
-
-// TimelineProvider のメソッド。headline はプロバイダが読み込んだ見出し。
-func getTimeline(in context: Context, completion: @escaping (Timeline<HeadlineEntry>) -> Void) {
-    completion(schedule.timeline(from: .now) { date in
+// HeadlineProvider 内
+func timeline(for configuration: HeadlineConfiguration, in context: Context) async -> Timeline<HeadlineEntry> {
+    let headline = configuration.headline
+    return schedule(for: headline).timeline(from: .now) { date in
         HeadlineEntry(date: date, headline: headline)
-    })
+    }
 }
 ```
 
-Widgetのビューにエントリの日時を渡すと、その時点の表示位置が決まります。1行に収まる文章、「視差効果を減らす」が有効な場合、画面の輝度が下がった場合は、先頭を静止表示します。VoiceOverは文章全体を1回で読み上げます。
+Widgetのビューはエントリの日時からその時点の表示位置を決めます。「視差効果を減らす」が有効な場合や画面の輝度が下がった場合は先頭を静止表示します。VoiceOverは文章全体を1回で読み上げます。
 
 ```swift
-WidgetMarquee(entry.headline, date: entry.date, schedule: schedule)
+WidgetMarquee(entry.headline, date: entry.date, schedule: schedule(for: entry.headline))
     .containerBackground(.background, for: .widget)
 ```
-
-プロバイダからWidgetの宣言までを含む例を用意しています。新しいWidget Extensionで試す場合は、テンプレートの `@main` をこの例のものに置き換え、ホーム画面に中サイズの「Headline」を追加してください。[最小のWidget実装](Examples/HeadlineWidget.swift)
 
 ## 周期と更新
 
