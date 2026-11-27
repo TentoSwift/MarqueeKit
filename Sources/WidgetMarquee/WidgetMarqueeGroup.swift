@@ -3,8 +3,7 @@ import Foundation
 /// Coordinates the start of each pass across two or more marquee rows.
 ///
 /// Each row travels at its own speed, then waits at the head of its text.
-/// Eased rows slow together as each one finishes. The remaining eased rows
-/// accelerate together through the next part of their pass.
+/// Eased rows accelerate together, then each slows only for its own finish.
 /// The group's pause begins when its last moving row arrives. Keep `startedAt`
 /// stable when rebuilding the group or requesting the next widget timeline.
 public struct WidgetMarqueeGroup: Sendable {
@@ -42,53 +41,51 @@ public struct WidgetMarqueeGroup: Sendable {
         let liveMotion: Motion?
     }
 
-    /// Arrival times are also distances expressed in seconds at the specified
-    /// average speed. Easing that shared coordinate keeps displacements in
-    /// points equal for equally fast rows until the shorter one completes.
+    /// Each row integrates a shared acceleration and cruise speed, followed
+    /// by its own deceleration. The area under its speed curve is one pass.
     struct Motion: Sendable {
-        let groupArrivals: [TimeInterval]
-        let arrivals: ArraySlice<TimeInterval>
         let duration: TimeInterval
+        let accelerationDuration: TimeInterval
+        let decelerationDuration: TimeInterval
+        let cruiseFactor: Double
+
+        var decelerationStart: TimeInterval { duration - decelerationDuration }
 
         static func profiles(for durations: [TimeInterval], timings: [WidgetMarqueeTiming]) -> [TimeInterval: Motion] {
-            let arrivals = Set(zip(durations, timings).compactMap { duration, timing in
+            let moving = Set(zip(durations, timings).compactMap { duration, timing in
                 duration > 0 && timing == .easeInOut ? duration : nil
-            }).sorted()
-            guard arrivals.count > 1 else { return [:] }
-            // Give even the first row the shared profile so Live Activity rows
-            // sample the same phase grid while moving together.
-            return Dictionary(uniqueKeysWithValues: arrivals.indices.map { index in
-                let duration = arrivals[index]
-                return (duration, Motion(groupArrivals: arrivals, arrivals: arrivals[...index], duration: duration))
+            })
+            guard let shortest = moving.min(), let longest = moving.max(), shortest < longest else { return [:] }
+            // Each velocity ramp averages half the cruise speed. Reserve at most
+            // 1.5 seconds or a third of a pass for both ramps combined.
+            let lossFraction = min(1.0 / 6, 0.75 / longest)
+            let acceleration = lossFraction * shortest
+            let cruiseFactor = 1 / (1 - lossFraction)
+            return Dictionary(uniqueKeysWithValues: moving.map { duration in
+                let deceleration = (2 * lossFraction) * duration - acceleration
+                return (duration, Motion(duration: duration, accelerationDuration: acceleration,
+                                         decelerationDuration: deceleration, cruiseFactor: cruiseFactor))
             })
         }
 
         func progress(at elapsed: TimeInterval) -> Double {
             guard elapsed > 0 else { return 0 }
             guard elapsed < duration else { return 1 }
-            let segment = segment(at: elapsed)
-            return (segment.start + segment.length * WidgetMarqueeTiming.easeInOut.progress(segment.fraction)) / duration
+            if elapsed < accelerationDuration {
+                return 0.5 * cruiseFactor * (elapsed / duration) * (elapsed / accelerationDuration)
+            }
+            if elapsed < decelerationStart {
+                return cruiseFactor * ((elapsed - 0.5 * accelerationDuration) / duration)
+            }
+            let remaining = duration - elapsed
+            return 1 - 0.5 * cruiseFactor * (remaining / duration) * (remaining / decelerationDuration)
         }
 
         func speedFactor(at elapsed: TimeInterval) -> Double {
             guard elapsed > 0 && elapsed < duration else { return 0 }
-            return WidgetMarqueeTiming.easeInOut.speedFactor(segment(at: elapsed).fraction)
-        }
-
-        private func segment(at elapsed: TimeInterval) -> (start: TimeInterval, length: TimeInterval, fraction: Double) {
-            var lower = arrivals.startIndex
-            var upper = arrivals.endIndex - 1
-            while lower < upper {
-                let mid = lower + (upper - lower) / 2
-                if arrivals[mid] < elapsed {
-                    lower = mid + 1
-                } else {
-                    upper = mid
-                }
-            }
-            let start = lower == arrivals.startIndex ? 0 : arrivals[lower - 1]
-            let length = arrivals[lower] - start
-            return (start, length, (elapsed - start) / length)
+            if elapsed < accelerationDuration { return cruiseFactor * (elapsed / accelerationDuration) }
+            if elapsed < decelerationStart { return cruiseFactor }
+            return cruiseFactor * ((duration - elapsed) / decelerationDuration)
         }
     }
 

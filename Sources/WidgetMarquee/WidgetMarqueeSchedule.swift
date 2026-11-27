@@ -125,10 +125,7 @@ public struct WidgetMarqueeSchedule: Sendable {
         let end = start.addingTimeInterval(150 * step)
         var samples = Set((0...150).map { start.addingTimeInterval(Double($0) * step) })
         for schedule in moving {
-            // A whole group's schedules already contribute one stop per row.
-            // Also include sibling stops when building a single row's timeline.
-            schedule.insertBoundaries(in: start..<end, minimumInterval: step,
-                                      includeSiblingStops: moving.count == 1, into: &samples)
+            schedule.insertBoundaries(in: start..<end, minimumInterval: step, into: &samples)
         }
         let dates = Array(samples.sorted().prefix(151))
         let entries = dates.indices.map { index in
@@ -138,7 +135,7 @@ public struct WidgetMarqueeSchedule: Sendable {
         return Timeline(entries: entries, policy: .after(dates[min(120, dates.count - 1)]))
     }
 
-    private func insertBoundaries(in range: Range<Date>, minimumInterval: TimeInterval, includeSiblingStops: Bool,
+    private func insertBoundaries(in range: Range<Date>, minimumInterval: TimeInterval,
                                   into dates: inout Set<Date>) {
         guard let travel = passDuration, groupCycle != nil || pauseBetweenLoops > 0 else { return }
         let origin = groupCycle?.start ?? Date(timeIntervalSinceReferenceDate: 0)
@@ -153,10 +150,10 @@ public struct WidgetMarqueeSchedule: Sendable {
             let lapStart = origin.addingTimeInterval(lap * cycleDuration)
             guard lapStart < range.upperBound else { break }
             if range.contains(lapStart) { dates.insert(lapStart) }
-            if includeSiblingStops, let groupMotion {
-                for arrival in groupMotion.arrivals.dropLast() {
-                    let stop = lapStart.addingTimeInterval(arrival)
-                    if range.contains(stop) { dates.insert(stop) }
+            if let groupMotion {
+                for boundary in [groupMotion.accelerationDuration, groupMotion.decelerationStart] {
+                    let change = lapStart.addingTimeInterval(boundary)
+                    if range.contains(change) { dates.insert(change) }
                 }
             }
             if pauseBetweenLoops > 0 {
@@ -180,13 +177,14 @@ public struct WidgetMarqueeSchedule: Sendable {
         let epsilon = max(1e-12, time.ulp * 2)
         let sinceBoundary: TimeInterval
         if elapsed <= epsilon || cycleDuration - elapsed <= epsilon {
-            let lastSiblingStop = groupMotion?.arrivals.dropLast().last ?? 0
-            sinceBoundary = pauseBetweenLoops > 0 ? pauseBetweenLoops : cycleDuration - lastSiblingStop
+            sinceBoundary = pauseBetweenLoops > 0 ? pauseBetweenLoops : cycleDuration - (groupMotion?.decelerationStart ?? 0)
         } else if elapsed > pass + epsilon {
             sinceBoundary = elapsed - pass
         } else {
-            let previousStop = groupMotion?.arrivals.last { $0 < elapsed - epsilon } ?? 0
-            sinceBoundary = elapsed - previousStop
+            let previousBoundary = groupMotion.flatMap {
+                [$0.accelerationDuration, $0.decelerationStart].last { $0 < elapsed - epsilon }
+            } ?? 0
+            sinceBoundary = elapsed - previousBoundary
         }
         return Date(timeIntervalSinceReferenceDate: max(previousGrid, time - sinceBoundary))
     }
@@ -217,6 +215,8 @@ public struct WidgetMarqueeSchedule: Sendable {
         let coordinate = cycleCoordinate(at: date)
         return (coordinate - floor(coordinate)) * cycleDuration
     }
+
+    var cruiseFactor: Double? { groupMotion?.cruiseFactor }
 
     func speedFactor(at date: Date, pass: TimeInterval) -> Double {
         let elapsed = elapsedInCycle(at: date)

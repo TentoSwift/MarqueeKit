@@ -6,12 +6,12 @@ iOSアプリ、ホーム画面Widget、Live Activityで、1行に収まらない
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.4.1` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.4.2` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
 
 `Package.swift` から追加する場合は、`dependencies` に次の行を指定します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.4.1")
+.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.4.2")
 ```
 
 ## SwiftUIアプリで使う
@@ -68,7 +68,7 @@ VStack(alignment: .leading) {
 
 SwiftUIアプリでは同じ `group.rows` を `WidgetMarquee(row)` に渡します。`startedAt` にはアプリの状態に保存した開始日時、またはLive Activityの開始属性を使い、ビューを描き直しても同じ日時を渡してください。別々に周回させる場合は、従来どおり文章を各ビューに直接渡します。
 
-同じ `pointsPerSecond` と `.easeInOut` を指定した行は、文章の長さが違っても、一緒に動いている間は同じ速さで進みます。短い行が一周するときは両方が滑らかに減速し、短い行は先頭で待ち、長い行はすぐに加速して残りを進みます。`.linear` を指定すると、各行は一周するまで一定の速度で進みます。[同じ速度で加減速する2行の録画（MP4）](https://github.com/TentoSwift/WidgetMarquee/releases/download/1.4.1/synchronized-marquee-speed.mp4)
+長さの異なる2行に同じ `pointsPerSecond` と `.easeInOut` を指定すると、一緒に加速して同じ巡航速度に達します。その後は各行が自分の終点に近づいたときだけ減速します。短い行が先頭で待っている間も、長い行はそのまま進みます。`pointsPerSecond` は一周の移動中の平均速度なので、加減速のある行の巡航速度は指定値より少し速くなります。`.linear` では指定した速度のまま一周します。[短い行の停止前後を収めた録画（MP4）](https://github.com/TentoSwift/WidgetMarquee/releases/download/1.4.2/independent-marquee-stops.mp4)
 
 表示幅に収まる行がある場合は、`viewportWidth` にラベルや余白を除いた本文の幅を渡してください。グループはその行を加減速と待ち時間の計算から除外します。行ごとに速度や表示幅が異なる場合は `items:` を使えます。速度0の行もほかの行を待たせません。
 

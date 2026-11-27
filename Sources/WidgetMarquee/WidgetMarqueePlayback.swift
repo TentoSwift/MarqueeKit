@@ -21,38 +21,6 @@ enum WidgetMarqueePlayback {
         }
     }()
 
-    /// Interpolating past a shorter row's stop would give each row a different
-    /// slope in that interval. Put each shared stop on a font sample instead.
-    private static func groupSampleTimes(arrivals: [TimeInterval], cycle: TimeInterval) -> [TimeInterval] {
-        var times = groupSamples.map { $0.phase * cycle }
-        let end = times.count - 1
-        var arrivalIndex = 0
-        var lastAnchor = 0
-        // Only intermediate arrivals separate rows that are moving together.
-        for upper in 1...end {
-            let first = arrivalIndex
-            while arrivalIndex < arrivals.count - 1, arrivals[arrivalIndex] <= times[upper] {
-                arrivalIndex += 1
-            }
-            guard first < arrivalIndex else { continue }
-            let lower = upper - 1
-            if upper == end {
-                // The cycle endpoints always keep their exact start/end values.
-                if lower > lastAnchor { times[lower] = arrivals[first] }
-            } else if arrivalIndex - first > 1, lower > lastAnchor {
-                // If a cell contains several stops, use both available ends.
-                // Additional stops within that cell share its interpolation.
-                times[lower] = arrivals[first]
-                times[upper] = arrivals[arrivalIndex - 1]
-                lastAnchor = upper
-            } else {
-                times[upper] = arrivals[first]
-                lastAnchor = upper
-            }
-        }
-        return times
-    }
-
     static func font(_ base: CTFont, period: CGFloat, travelDuration: TimeInterval,
                      pause: TimeInterval, timing: WidgetMarqueeTiming, cycleDuration: TimeInterval? = nil,
                      groupMotion: WidgetMarqueeGroup.Motion? = nil) -> CTFont {
@@ -74,9 +42,10 @@ enum WidgetMarqueePlayback {
         let axes: [UInt32: Double]
         if let groupMotion {
             features.append([kCTFontOpenTypeFeatureTag: "GRUP", kCTFontOpenTypeFeatureValue: 1])
-            let times = groupSampleTimes(arrivals: groupMotion.groupArrivals, cycle: cycle)
-            axes = Dictionary(uniqueKeysWithValues: zip(groupSamples, times).compactMap { sample, time in
-                let remaining = 1 - groupMotion.progress(at: time)
+            // Sample on the actual clock grid. Moving a sample to a sibling's
+            // finishing time would change this row's speed during its cruise.
+            axes = Dictionary(uniqueKeysWithValues: groupSamples.compactMap { sample in
+                let remaining = 1 - groupMotion.progress(at: sample.phase * cycle)
                 return remaining > 0 ? (sample.axis, remaining) : nil
             })
         } else {

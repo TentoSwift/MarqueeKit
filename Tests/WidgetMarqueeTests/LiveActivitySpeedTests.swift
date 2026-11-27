@@ -92,7 +92,7 @@ final class LiveActivitySpeedTests: XCTestCase {
     }
 
     @MainActor
-    func testEasedGroupClockMatchesPointDisplacementsUntilEachRowArrives() throws {
+    func testEasedGroupClockTracksEachRowsOwnBrakingAndTheSharedRestart() throws {
         let base = try bundledFont("WidgetMarqueePlayback")
         let texts = ["東京から Kyoto", "東京から 京都を経由して 大阪へ",
                      "東京から 京都を経由して 大阪へ向かう列車です"]
@@ -102,26 +102,21 @@ final class LiveActivitySpeedTests: XCTestCase {
         let periods = texts.map { WidgetMarqueeMetrics.liveRepeatWidth(for: $0) }
         let travel = group.rows.map(\.liveTravelDuration)
         let cycle = group.rows[0].liveCycleDuration
-        let rulers = try group.rows.enumerated().map { index, row in
+        let motions = try group.rows.map { try XCTUnwrap($0.liveMotion) }
+        let rulers = group.rows.enumerated().map { index, row in
             WidgetMarqueePlayback.font(base, period: periods[index], travelDuration: travel[index], pause: 0,
-                                       timing: row.timing, cycleDuration: cycle, groupMotion: try XCTUnwrap(row.liveMotion))
+                                       timing: row.timing, cycleDuration: cycle, groupMotion: motions[index])
         }
-        // Measure the actual shaped advances of the native clock, including two
-        // different arrival points, time spent at the head, and a synchronized restart.
+        let firstBrake = try XCTUnwrap(motions.map(\.decelerationStart).min())
         for tick in stride(from: 0, through: Int((cycle + travel[0]) * 100), by: 7) {
             let stamp = String(format: "%d:%02d.%02d", tick / 6000, tick / 100 % 60, tick % 100)
             let local = (Double(tick) / 100).truncatingRemainder(dividingBy: cycle)
             let distances = rulers.indices.map { periods[$0] - advance(stamp, font: rulers[$0]) }
             for index in rulers.indices {
-                let expected: Double
-                if let segment = travel.firstIndex(where: { $0 > local }), local < travel[index] {
-                    let start = segment == 0 ? 0 : travel[segment - 1]
-                    let length = travel[segment] - start
-                    let fraction = (local - start) / length
-                    expected = speed * (start + length * fraction * fraction * (3 - 2 * fraction))
+                let expected = periods[index] * motions[index].progress(at: local)
+                // Interpolation may straddle a braking boundary by one font sample.
+                if local + cycle / 128 < firstBrake {
                     XCTAssertEqual(distances[index], distances.last!, accuracy: 0.1, stamp)
-                } else {
-                    expected = periods[index]
                 }
                 XCTAssertEqual(distances[index], expected, accuracy: 0.65, stamp)
             }
@@ -165,29 +160,36 @@ final class LiveActivitySpeedTests: XCTestCase {
         }
     }
 
-    func testNearlyEqualEasedRowsStayAlignedThroughTheirFirstArrival() throws {
+    func testLongClockKeepsCruisingWhileShortClockStops() throws {
         let base = try bundledFont("WidgetMarqueePlayback")
-        let speed: CGFloat = 55
-        for (periods, pause): ([CGFloat], Double) in [([1000, 1008], 2), ([100, 108], 110)] {
-            let travel = periods.map { Double($0 / speed) }
-            let cycle = travel[1] + pause
-            let profiles = WidgetMarqueeGroup.Motion.profiles(for: travel, timings: [.easeInOut, .easeInOut])
+        let periods: [CGFloat] = [212.5, 500]
+        let speed: CGFloat = 50
+        let travel = periods.map { Double($0 / speed) }
+        let profiles = WidgetMarqueeGroup.Motion.profiles(for: travel, timings: [.easeInOut, .easeInOut])
+        // In the 128-second cycle, 4.25 s falls halfway between native sample
+        // knots. Moving the long row's knot to that stop would halve its speed.
+        for cycle in [14.0, 128.0] {
             let rulers = try periods.indices.map { i in
                 WidgetMarqueePlayback.font(base, period: periods[i], travelDuration: travel[i], pause: 0,
                                             timing: .easeInOut, cycleDuration: cycle,
                                             groupMotion: try XCTUnwrap(profiles[travel[i]]))
             }
-            for tick in 0...Int(travel[0] * 100) {
-                let stamp = String(format: "%d:%02d.%02d", tick / 6000, tick / 100 % 60, tick % 100)
-                let short = periods[0] - advance(stamp, font: rulers[0])
-                let long = periods[1] - advance(stamp, font: rulers[1])
-                XCTAssertEqual(short, long, accuracy: 0.15, stamp)
+            func moved(_ row: Int, from start: String, to end: String) -> CGFloat {
+                advance(start, font: rulers[row]) - advance(end, font: rulers[row])
             }
-            // Both widths reach zero during the shared pause, including a
-            // short pass followed by a hold that dominates the entire cycle.
-            let holdSecond = Int(ceil(travel[1])) + 1
-            let hold = String(format: "%d:%02d.00", holdSecond / 60, holdSecond % 60)
-            for ruler in rulers { XCTAssertEqual(advance(hold, font: ruler), 0, accuracy: 0.001) }
+            let cruise = moved(1, from: "0:02.00", to: "0:02.50")
+            XCTAssertGreaterThan(cruise, speed * 0.5)
+            XCTAssertEqual(moved(0, from: "0:02.00", to: "0:02.50"), cruise, accuracy: 0.08)
+            for (start, end) in [("0:03.50", "0:04.00"), ("0:04.00", "0:04.50"), ("0:04.50", "0:05.00")] {
+                XCTAssertEqual(moved(1, from: start, to: end), cruise, accuracy: 0.45, start)
+            }
+            XCTAssertLessThan(moved(0, from: "0:04.00", to: "0:04.50"), cruise * 0.6)
+            XCTAssertEqual(advance("0:04.50", font: rulers[0]), 0, accuracy: 0.01)
+            for ruler in rulers { XCTAssertEqual(advance("0:13.00", font: ruler), 0, accuracy: 0.001) }
+            if cycle == 14 {
+                // The fifth lap also passes the short arrival across the minute carry.
+                XCTAssertEqual(moved(1, from: "0:59.75", to: "1:00.25"), cruise, accuracy: 0.45)
+            }
         }
     }
 }

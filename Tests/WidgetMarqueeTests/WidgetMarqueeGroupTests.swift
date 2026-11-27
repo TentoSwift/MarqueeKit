@@ -41,7 +41,46 @@ final class WidgetMarqueeGroupTests: XCTestCase {
         XCTAssertGreaterThan(group.rows[1].widgetTravelDuration, group.rows[0].widgetTravelDuration)
     }
 
-    func testOnlyDistinctMovingEasedArrivalsAffectTheSharedCurve() throws {
+    func testNearbyArrivalsNeverMakeTheLongerRowSlowThenReaccelerate() throws {
+        let text = "Kyoto express"
+        let width = WidgetMarqueeMetrics.repeatWidth(for: text)
+        let group = WidgetMarqueeGroup(items: [
+            .init(text, pointsPerSecond: width / 2),
+            .init(text, pointsPerSecond: width / 10),
+            .init(text, pointsPerSecond: width / 10.08)
+        ], startedAt: start, pointsPerSecond: 40, timing: .easeInOut)
+        let motion = try XCTUnwrap(group.rows[2].widgetMotion)
+        // Its own terminal ramp overlaps its neighbor's stop at 10 seconds.
+        XCTAssertLessThan(motion.decelerationStart, 10)
+        XCTAssertGreaterThan(motion.speedFactor(at: 10), 0)
+        var previousSpeed = motion.cruiseFactor
+        for i in 0...1000 {
+            let t = motion.accelerationDuration + (motion.duration - motion.accelerationDuration) * Double(i) / 1000
+            let speed = motion.speedFactor(at: t)
+            XCTAssertLessThanOrEqual(speed, previousSpeed + 1e-12)
+            previousSpeed = speed
+        }
+        XCTAssertEqual(motion.speedFactor(at: motion.duration), 0)
+    }
+
+    func testExtremeTravelRatiosKeepProfilesFiniteAndMonotone() throws {
+        let durations = [1e-275, 1, 1e275]
+        let profiles = WidgetMarqueeGroup.Motion.profiles(for: durations, timings: [.easeInOut, .easeInOut, .easeInOut])
+        for duration in durations {
+            let motion = try XCTUnwrap(profiles[duration])
+            var previous = 0.0
+            for fraction in [0.0, 0.01, 0.75, 0.99, 1.0] {
+                let elapsed = fraction * duration
+                let position = motion.progress(at: elapsed)
+                XCTAssertTrue((previous...1).contains(position))
+                XCTAssertTrue(motion.speedFactor(at: elapsed).isFinite)
+                previous = position
+            }
+            XCTAssertEqual(previous, 1)
+        }
+    }
+
+    func testOnlyMovingEasedRowsSetTheCommonAccelerationAndCruise() throws {
         let group = WidgetMarqueeGroup(items: [
             .init("First train"), .init("First train"), .init("Last train for Kyoto via Nagoya"),
             .init("Express", timing: .linear), .init("Fits", viewportWidth: 300), .init("Stopped", pointsPerSecond: 0)
@@ -52,9 +91,13 @@ final class WidgetMarqueeGroupTests: XCTestCase {
             let first = try XCTUnwrap(profiles[0])
             let duplicate = try XCTUnwrap(profiles[1])
             let last = try XCTUnwrap(profiles[2])
-            XCTAssertEqual(Array(first.arrivals), [durations[0]])
-            XCTAssertEqual(first.arrivals, duplicate.arrivals)
-            XCTAssertEqual(Array(last.arrivals), [durations[0], durations[2]])
+            XCTAssertEqual(first.duration, durations[0])
+            XCTAssertEqual(last.duration, durations[2])
+            XCTAssertEqual(first.cruiseFactor, last.cruiseFactor)
+            XCTAssertEqual(first.accelerationDuration, last.accelerationDuration)
+            XCTAssertEqual(first.decelerationStart, duplicate.decelerationStart)
+            XCTAssertEqual(first.accelerationDuration, first.decelerationDuration, accuracy: 1e-12)
+            XCTAssertGreaterThan(last.decelerationStart, first.duration)
             XCTAssertTrue(profiles[3...].allSatisfy { $0 == nil })
         }
 

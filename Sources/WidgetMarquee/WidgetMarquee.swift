@@ -164,11 +164,14 @@ extension WidgetMarqueeSchedule {
         guard distance > 1e-12 else { return nil }
         guard timing == .easeInOut else { return linear }
 
-        // Match the smoothstep slopes at both ends of the actual scheduled
+        // Match the motion's slopes at both ends of the actual scheduled
         // interval. Intermediate entries do not restart the easing curve.
+        let firstSpeed = speedFactor(at: start, pass: pass)
+        let lastSpeed = speedFactor(at: end, pass: pass)
+        if let cruiseFactor, firstSpeed == cruiseFactor, lastSpeed == cruiseFactor { return linear }
         let scale = (interval / pass) / (3 * distance)
-        let firstControl = min(1, speedFactor(at: start, pass: pass) * scale)
-        let lastControl = max(0, 1 - speedFactor(at: end, pass: pass) * scale)
+        let firstControl = min(1, firstSpeed * scale)
+        let lastControl = max(0, 1 - lastSpeed * scale)
         return .timingCurve(1.0 / 3, firstControl, 2.0 / 3, lastControl, duration: interval)
     }
 }

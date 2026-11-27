@@ -2,8 +2,7 @@
 public enum WidgetMarqueeTiming: String, Codable, Sendable {
     /// Moves at a constant speed.
     case linear
-    /// Starts and ends at rest. In a group, eased rows also come to rest
-    /// together at each eased row's arrival.
+    /// Starts and ends at rest. In a group, each row slows for its own arrival.
     case easeInOut
 
     func progress(_ fraction: Double) -> Double {
