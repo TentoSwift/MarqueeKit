@@ -35,7 +35,7 @@ GLYPH_ORDER = [
     ".notdef", "blank", "colon", "decimal", *DIGITS, *POSITIONAL_DIGITS,
     *TOKENS, *NIBBLES, *ACCUMULATORS,
 ]
-DEFAULT_PATH = Path(__file__).resolve().parents[1] / "Sources/MarqueeKit/Resources/WidgetMarqueePlayback.ttf"
+DEFAULT_PATH = Path(__file__).resolve().parents[1] / "Sources/MarqueeKit/Resources/WidgetMarqueePlayback.woff2"
 
 
 def glyph_class(name, glyphs):
@@ -167,6 +167,8 @@ def build_font(output=DEFAULT_PATH):
     builder.font["head"].created = 3850000000
     builder.font["head"].modified = 3878621914
     builder.font.recalcTimestamp = False
+    if output.suffix == ".woff2":
+        builder.font.flavor = "woff2"
     builder.save(output)
 
 

@@ -1,0 +1,483 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		13CA635CC796360DCA340D0C /* NowPlayingAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A9153787292CFD1948232C /* NowPlayingAttributes.swift */; };
+		212C88A90FFAA06E601A7A19 /* NowPlayingAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A9153787292CFD1948232C /* NowPlayingAttributes.swift */; };
+		3666686EB3EF22D88613002E /* MarqueePlayerWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CB622E5A496A35CB06A7DE2D /* MarqueePlayerWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		45029EB4E3FF9A2475071819 /* NowPlayingLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4932760D17D6EAB377B904 /* NowPlayingLiveActivity.swift */; };
+		4F4FE3668D4DD34D9B2DD97F /* MarqueeKit in Frameworks */ = {isa = PBXBuildFile; productRef = B9F1EF8456DB78FD0DC3075D /* MarqueeKit */; };
+		9C3FA779986BBA5F786C1F03 /* MarqueePlayerCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F629EC129DB5BE2FA3897B8 /* MarqueePlayerCode.swift */; };
+		C0E71F98EAE2AEA20A0383AD /* MarqueeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 37610D87C70B3344DBE22DC8 /* MarqueeKit */; };
+		D2D3616D1EC76356D6DB1190 /* PlayerWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C52783AA44977FB01DF0BDD /* PlayerWidgets.swift */; };
+		EB315282A1C2082B1C723A39 /* MarqueePlayerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE571D713BDC08253EB54CAE /* MarqueePlayerApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		4ADE31057439721C7C19AA6E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8BC16D3AE7513807699BFF02 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EF5183ABABC7B0300F9729B4;
+			remoteInfo = MarqueePlayerWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FDFF043C9203F050D2599B34 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				3666686EB3EF22D88613002E /* MarqueePlayerWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		2C52783AA44977FB01DF0BDD /* PlayerWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerWidgets.swift; sourceTree = "<group>"; };
+		2F6A828399D338DF74B09852 /* MarqueeKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MarqueeKit; path = ../..; sourceTree = SOURCE_ROOT; };
+		3F629EC129DB5BE2FA3897B8 /* MarqueePlayerCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarqueePlayerCode.swift; sourceTree = "<group>"; };
+		7C4932760D17D6EAB377B904 /* NowPlayingLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingLiveActivity.swift; sourceTree = "<group>"; };
+		80A9153787292CFD1948232C /* NowPlayingAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingAttributes.swift; sourceTree = "<group>"; };
+		C1710283A7D140DF2C38A850 /* MarqueePlayer.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MarqueePlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB622E5A496A35CB06A7DE2D /* MarqueePlayerWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MarqueePlayerWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		CE571D713BDC08253EB54CAE /* MarqueePlayerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarqueePlayerApp.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		DDC69BF54579EAFA162F4135 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4F4FE3668D4DD34D9B2DD97F /* MarqueeKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FE4679513219F0DFE0DCE4A3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0E71F98EAE2AEA20A0383AD /* MarqueeKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4C524CC6FD8B060FBEF93DA7 /* ProjectSupport */ = {
+			isa = PBXGroup;
+			children = (
+				2C52783AA44977FB01DF0BDD /* PlayerWidgets.swift */,
+			);
+			path = ProjectSupport;
+			sourceTree = "<group>";
+		};
+		5FC22855B84B5F0B84CA857D /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				2F6A828399D338DF74B09852 /* MarqueeKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		6D41634DE561E738A5DDDD41 = {
+			isa = PBXGroup;
+			children = (
+				CE571D713BDC08253EB54CAE /* MarqueePlayerApp.swift */,
+				3F629EC129DB5BE2FA3897B8 /* MarqueePlayerCode.swift */,
+				80A9153787292CFD1948232C /* NowPlayingAttributes.swift */,
+				7C4932760D17D6EAB377B904 /* NowPlayingLiveActivity.swift */,
+				5FC22855B84B5F0B84CA857D /* Packages */,
+				4C524CC6FD8B060FBEF93DA7 /* ProjectSupport */,
+				C25C30AACF1CAE31DC7A562D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C25C30AACF1CAE31DC7A562D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C1710283A7D140DF2C38A850 /* MarqueePlayer.app */,
+				CB622E5A496A35CB06A7DE2D /* MarqueePlayerWidget.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		27A545AF457D00E36A24BFAC /* MarqueePlayer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C3206B0BD77D7425F4D2A0BE /* Build configuration list for PBXNativeTarget "MarqueePlayer" */;
+			buildPhases = (
+				721F55051E485A1EB29CA909 /* Sources */,
+				DDC69BF54579EAFA162F4135 /* Frameworks */,
+				FDFF043C9203F050D2599B34 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E4E9C397B74FFF9341A95627 /* PBXTargetDependency */,
+			);
+			name = MarqueePlayer;
+			packageProductDependencies = (
+				B9F1EF8456DB78FD0DC3075D /* MarqueeKit */,
+			);
+			productName = MarqueePlayer;
+			productReference = C1710283A7D140DF2C38A850 /* MarqueePlayer.app */;
+			productType = "com.apple.product-type.application";
+		};
+		EF5183ABABC7B0300F9729B4 /* MarqueePlayerWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2F33DB802F75EE2E72F4B053 /* Build configuration list for PBXNativeTarget "MarqueePlayerWidget" */;
+			buildPhases = (
+				E47DA725D9CC31AE5DFD80CA /* Sources */,
+				FE4679513219F0DFE0DCE4A3 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MarqueePlayerWidget;
+			packageProductDependencies = (
+				37610D87C70B3344DBE22DC8 /* MarqueeKit */,
+			);
+			productName = MarqueePlayerWidget;
+			productReference = CB622E5A496A35CB06A7DE2D /* MarqueePlayerWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8BC16D3AE7513807699BFF02 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					27A545AF457D00E36A24BFAC = {
+						ProvisioningStyle = Automatic;
+					};
+					EF5183ABABC7B0300F9729B4 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 9ACB18FA5A72A2FC4EE3C13E /* Build configuration list for PBXProject "MarqueePlayer" */;
+			developmentRegion = ja;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				ja,
+			);
+			mainGroup = 6D41634DE561E738A5DDDD41;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9363355EA332BB88A8A62467 /* XCLocalSwiftPackageReference "../.." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = C25C30AACF1CAE31DC7A562D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				27A545AF457D00E36A24BFAC /* MarqueePlayer */,
+				EF5183ABABC7B0300F9729B4 /* MarqueePlayerWidget */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		721F55051E485A1EB29CA909 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EB315282A1C2082B1C723A39 /* MarqueePlayerApp.swift in Sources */,
+				9C3FA779986BBA5F786C1F03 /* MarqueePlayerCode.swift in Sources */,
+				13CA635CC796360DCA340D0C /* NowPlayingAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E47DA725D9CC31AE5DFD80CA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				212C88A90FFAA06E601A7A19 /* NowPlayingAttributes.swift in Sources */,
+				45029EB4E3FF9A2475071819 /* NowPlayingLiveActivity.swift in Sources */,
+				D2D3616D1EC76356D6DB1190 /* PlayerWidgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E4E9C397B74FFF9341A95627 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EF5183ABABC7B0300F9729B4 /* MarqueePlayerWidget */;
+			targetProxy = 4ADE31057439721C7C19AA6E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		3C4ABBCC8936AF3986178EBE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_KEY_CFBundleDisplayName = "Marquee Player";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = local.codex.MarqueeNowPlaying;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		6FF0A5A544E3118591F1F53A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				INFOPLIST_FILE = ProjectSupport/WidgetInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Marquee Player";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = local.codex.MarqueeNowPlaying.Widget;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		75122CBFC8A0972B9A604E91 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				INFOPLIST_FILE = ProjectSupport/WidgetInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Marquee Player";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = local.codex.MarqueeNowPlaying.Widget;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		DB01E2BD37443E82DF7C1143 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_KEY_CFBundleDisplayName = "Marquee Player";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = local.codex.MarqueeNowPlaying;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E958733CA2C9CF6A4A174BFF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 27;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.8.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		ED9294091EAF18B327C38C0C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 27;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.8.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2F33DB802F75EE2E72F4B053 /* Build configuration list for PBXNativeTarget "MarqueePlayerWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				75122CBFC8A0972B9A604E91 /* Debug */,
+				6FF0A5A544E3118591F1F53A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9ACB18FA5A72A2FC4EE3C13E /* Build configuration list for PBXProject "MarqueePlayer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ED9294091EAF18B327C38C0C /* Debug */,
+				E958733CA2C9CF6A4A174BFF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C3206B0BD77D7425F4D2A0BE /* Build configuration list for PBXNativeTarget "MarqueePlayer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DB01E2BD37443E82DF7C1143 /* Debug */,
+				3C4ABBCC8936AF3986178EBE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		9363355EA332BB88A8A62467 /* XCLocalSwiftPackageReference "../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		37610D87C70B3344DBE22DC8 /* MarqueeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MarqueeKit;
+		};
+		B9F1EF8456DB78FD0DC3075D /* MarqueeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MarqueeKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 8BC16D3AE7513807699BFF02 /* Project object */;
+}

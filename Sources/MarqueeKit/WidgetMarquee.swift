@@ -32,15 +32,17 @@ public struct WidgetMarquee: View {
         self.init(row.text, schedule: WidgetMarqueeSchedule(row))
     }
 
-    /// Sets the average travel speed, the timing within each pass, and an optional pause between passes.
+    /// Sets the travel speed, timing, and an optional pause between passes. A custom
+    /// ramp uses the specified speed for the constant-speed part of the pass.
     public init(
         _ text: String, pointsPerSecond: CGFloat? = nil,
         timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
-        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil, repeatSpacing: CGFloat? = nil,
+        ramps: MarqueeRamps? = nil
     ) {
         let schedule = WidgetMarqueeSchedule(
             for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops,
-            axis: axis, horizontalFont: horizontalFont
+            axis: axis, horizontalFont: horizontalFont, repeatSpacing: repeatSpacing, ramps: ramps
         )
         self.init(text, schedule: schedule)
     }
@@ -65,11 +67,12 @@ public struct WidgetMarquee: View {
     public init(
         _ text: String, date: Date, pointsPerSecond: CGFloat? = nil,
         timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
-        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil, repeatSpacing: CGFloat? = nil,
+        ramps: MarqueeRamps? = nil
     ) {
         let schedule = WidgetMarqueeSchedule(
             for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops,
-            axis: axis, horizontalFont: horizontalFont
+            axis: axis, horizontalFont: horizontalFont, repeatSpacing: repeatSpacing, ramps: ramps
         )
         self.init(text, date: date, schedule: schedule)
     }
@@ -94,11 +97,12 @@ public struct WidgetMarquee: View {
     public nonisolated static func timeline(
         for text: String, from date: Date = .now, pointsPerSecond: CGFloat? = nil,
         timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
-        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil, repeatSpacing: CGFloat? = nil,
+        ramps: MarqueeRamps? = nil
     ) -> Timeline<WidgetMarqueeEntry> {
         let schedule = WidgetMarqueeSchedule(
             for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops,
-            axis: axis, horizontalFont: horizontalFont
+            axis: axis, horizontalFont: horizontalFont, repeatSpacing: repeatSpacing, ramps: ramps
         )
         return timeline(for: text, from: date, schedule: schedule)
     }
@@ -172,7 +176,7 @@ public struct WidgetMarquee: View {
         return ZStack(alignment: alignment) {
             ForEach(0..<3, id: \.self) { copy in
                 let lane = schedule.position(at: date, copy: copy)
-                let shift = (textLength + WidgetMarqueeMetrics.gap) * (1 - CGFloat(lane)) + headInset
+                let shift = (textLength + schedule.repeatSpacing) * (1 - CGFloat(lane)) + headInset
                 label
                     .fixedSize()
                     .offset(x: axis == .horizontal ? shift : 0, y: axis == .vertical ? shift : 0)
@@ -201,12 +205,12 @@ extension WidgetMarqueeSchedule {
         var distance = position(at: end, copy: 0) - position(at: start, copy: 0)
         if distance < -1e-12 { distance += 3 }
         guard distance > 1e-12 else { return nil }
-        guard timing == .easeInOut else { return linear }
+        guard timing == .easeInOut || ramps != nil else { return linear }
 
         // Match the motion's slopes at both ends of the actual scheduled
         // interval. Intermediate entries do not restart the easing curve.
         let firstSpeed = speedFactor(at: start, pass: pass)
-        let lastSpeed = speedFactor(at: end, pass: pass)
+        let lastSpeed = speedFactor(at: end, pass: pass, arriving: true)
         if let cruiseFactor, firstSpeed == cruiseFactor, lastSpeed == cruiseFactor { return linear }
         let scale = (interval / pass) / (3 * distance)
         let firstControl = min(1, firstSpeed * scale)
@@ -238,7 +242,16 @@ enum WidgetMarqueeMetrics {
         textWidth(for: line) + gap
     }
 
-    static func liveRepeatWidth(for line: String, font: UIFont? = nil) -> CGFloat {
-        ((line + "    ") as NSString).size(withAttributes: [.font: font ?? Self.font]).width
+    static func normalizedRepeatSpacing(_ spacing: CGFloat?) -> CGFloat? {
+        guard let spacing, spacing.isFinite else { return nil }
+        return max(0, spacing)
+    }
+
+    static func liveRepeatWidth(for line: String, font: UIFont? = nil, repeatSpacing: CGFloat? = nil) -> CGFloat {
+        let attributes: [NSAttributedString.Key: Any] = [.font: font ?? Self.font]
+        if let spacing = normalizedRepeatSpacing(repeatSpacing) {
+            return (line as NSString).size(withAttributes: attributes).width + spacing
+        }
+        return ((line + "    ") as NSString).size(withAttributes: attributes).width
     }
 }

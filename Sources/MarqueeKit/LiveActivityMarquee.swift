@@ -15,6 +15,8 @@ public struct LiveActivityMarquee: View {
     private let axis: MarqueeAxis
     private let startedAt: Date
     private let pointsPerSecond: CGFloat?
+    private let ramps: MarqueeRamps?
+    private let repeatSpacing: CGFloat?
     private let timing: WidgetMarqueeTiming
     private let pauseBetweenLoops: TimeInterval
     private let sharedCycle: (travel: TimeInterval, duration: TimeInterval, motion: WidgetMarqueeGroup.Motion?)?
@@ -28,13 +30,15 @@ public struct LiveActivityMarquee: View {
     private var typeface: UIFont { horizontalFont ?? WidgetMarqueeMetrics.font }
     private var height: CGFloat { axis == .horizontal ? max(23, ceil(typeface.lineHeight)) : 23 }
     private static let gatePhases = 10
+    private static let shortLineBytes = 1_024
 
     private static let stopwatchFont = registerFont("WidgetMarqueeStopwatch")
-    private static let playbackFace = registerFont("WidgetMarqueePlayback", face: "WidgetMarqueePlaybackDirect-Regular")
+    private static let playbackFace = registerFont("WidgetMarqueePlayback", extension: "woff2", face: "WidgetMarqueePlaybackDirect-Regular")
     private static let speedFace = registerFont("WidgetMarqueeSpeed")
+    private static let spacingFont = registerFont("MarqueeRepeatSpace")
     private static let gateFont = registerFont("WidgetMarqueeTimerGate")
 
-    private static func registerFont(_ resourceName: String, face: String? = nil) -> String? {
+    private static func registerFont(_ resourceName: String, extension fileExtension: String = "ttf", face: String? = nil) -> String? {
         let postScriptName = face ?? resourceName + "-Regular"
         if UIFont(name: postScriptName, size: 14) != nil { return postScriptName }
 
@@ -50,8 +54,8 @@ public struct LiveActivityMarquee: View {
         for host in hosts {
             let packageURL = host.url(forResource: "MarqueeKit_MarqueeKit", withExtension: "bundle")
             let package = packageURL.flatMap(Bundle.init(url:))
-            if let url = package?.url(forResource: resourceName, withExtension: "ttf")
-                ?? host.url(forResource: resourceName, withExtension: "ttf") {
+            if let url = package?.url(forResource: resourceName, withExtension: fileExtension)
+                ?? host.url(forResource: resourceName, withExtension: fileExtension) {
                 CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
                 if UIFont(name: postScriptName, size: 14) != nil { return postScriptName }
             }
@@ -70,13 +74,18 @@ public struct LiveActivityMarquee: View {
     /// A vertical marquee shows one upright grapheme per cell and scrolls upward. Give its viewport a height
     /// with `.frame(height:)`. Omitting the speed gives ten seconds of travel. Nonpositive
     /// or nonfinite speeds stop the marquee. Nonpositive or nonfinite pauses become zero.
+    /// Set `repeatSpacing` to the distance in points between consecutive copies.
+    /// With custom `ramps`, `pointsPerSecond` specifies the cruising speed.
     /// Supply a UIKit font to measure and draw horizontal text at the same size and weight.
     public init(
         _ text: String, startedAt: Date, pointsPerSecond: CGFloat? = nil,
         timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
-        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil, repeatSpacing: CGFloat? = nil,
+        ramps: MarqueeRamps? = nil
     ) {
         self.text = text
+        self.ramps = ramps
+        self.repeatSpacing = WidgetMarqueeMetrics.normalizedRepeatSpacing(repeatSpacing)
         self.axis = axis
         self.horizontalFont = horizontalFont
         self.startedAt = startedAt
@@ -90,6 +99,8 @@ public struct LiveActivityMarquee: View {
     /// and rests at the head of its message until the group starts its next pass.
     public init(_ row: WidgetMarqueeGroup.Row) {
         self.text = row.text
+        self.ramps = row.ramps
+        self.repeatSpacing = row.repeatSpacing
         self.axis = row.axis
         self.horizontalFont = row.horizontalFont
         self.startedAt = row.startedAt
@@ -112,6 +123,8 @@ public struct LiveActivityMarquee: View {
                     Group {
                         if !reduceMotion, !reducedLuminance,
                            redactionReasons.intersection([.placeholder, .privacy]).isEmpty,
+                           (axis == .horizontal || repeatSpacing == nil || Self.spacingFont != nil),
+                           (repeatSpacing ?? 0) < CGFloat.greatestFiniteMagnitude / 32,
                            pointsPerSecond.map({ $0.isFinite && $0 > 0 }) ?? true {
                             moving(line, contentLength: contentLength, length: length, inset: edges.headInset)
                                 .transition(.identity)
@@ -139,22 +152,27 @@ public struct LiveActivityMarquee: View {
 
     @ViewBuilder
     private func moving(_ line: String, contentLength: CGFloat, length: CGFloat, inset: CGFloat) -> some View {
-        let unit = line + "    "
-        let period = axis == .vertical ? contentLength + WidgetMarqueeMetrics.gap : WidgetMarqueeMetrics.liveRepeatWidth(for: line, font: horizontalFont)
+        let period = axis == .vertical
+            ? contentLength + (repeatSpacing ?? WidgetMarqueeMetrics.gap)
+            : WidgetMarqueeMetrics.liveRepeatWidth(for: line, font: horizontalFont, repeatSpacing: repeatSpacing)
         // An inset wider than the loop gap exposes the end of the preceding copy.
         let previous = inset > period - contentLength ? 1 : 0
-        if axis == .vertical || sharedCycle != nil || timing != .linear || pauseBetweenLoops > 0 || line.utf8.count > 1_024 {
-            let travel = sharedCycle?.travel ?? pointsPerSecond.map { Double(period / $0) } ?? 10
+        if axis == .vertical || sharedCycle != nil || repeatSpacing != nil || ramps != nil || timing != .linear || pauseBetweenLoops > 0 || line.utf8.count > Self.shortLineBytes {
+            let baseTravel = pointsPerSecond.map { Double(period / $0) } ?? 10
+            let motion = sharedCycle?.motion ?? ramps.flatMap {
+                WidgetMarqueeGroup.Motion.custom($0, baseTravel: baseTravel, fixedDuration: pointsPerSecond == nil)
+            }
+            let travel = sharedCycle?.travel ?? motion?.duration ?? baseTravel
             if travel.isFinite, travel > 0, let face = Self.playbackFace {
                 let base = CTFontCreateWithName(face as CFString, 14, nil)
                 let ruler = Font(WidgetMarqueePlayback.font(
                     base, period: period, travelDuration: travel, pause: pauseBetweenLoops,
-                    timing: timing, cycleDuration: sharedCycle?.duration, groupMotion: sharedCycle?.motion
+                    timing: timing, cycleDuration: sharedCycle?.duration, groupMotion: motion
                 ))
                 if axis == .vertical {
-                    if let tile = LiveActivityVerticalStrip.unit(for: line) {
+                    if let tile = LiveActivityVerticalStrip.unit(for: line, repeatSpacing: repeatSpacing) {
                         let strip = Self.joined(Array(repeating: tile, count: 2 + previous))
-                        clockStrip(systemClock, ruler: ruler, strip: strip, prefixPeriods: 1 + previous,
+                        clockStrip(clock(startingAt: startedAt), ruler: ruler, strip: strip, prefixPeriods: 1 + previous,
                                    period: period, width: length, inset: inset)
                             .frame(width: length, height: height)
                             .rotationEffect(.degrees(90))
@@ -163,32 +181,49 @@ public struct LiveActivityMarquee: View {
                         stationary(line, length: length, inset: inset)
                     }
                 } else {
-                    let strip = messageStrip(String(repeating: unit, count: 1 + previous) + line)
-                    clockStrip(systemClock, ruler: ruler, strip: strip, prefixPeriods: 1 + previous,
-                               period: period, width: length, inset: inset)
+                    horizontalStrip(line, units: 1 + previous, ruler: ruler, prefixPeriods: 1 + previous,
+                                    period: period, width: length, inset: inset)
                 }
             } else {
                 stationary(line, length: length, inset: inset)
             }
         } else if let pointsPerSecond {
             if let face = Self.speedFace {
-                speedStrip(unit: unit, period: period, width: length, face: face, speed: pointsPerSecond,
-                           previous: previous, inset: inset)
+                let base = CTFontCreateWithName(face as CFString, 14, nil)
+                let ruler = Font(Self.speedFont(base, period: period, pointsPerSecond: pointsPerSecond))
+                // Seven clock digits each contribute less than one period.
+                horizontalStrip(line, units: 8 + previous, endsWithGap: true, ruler: ruler, prefixPeriods: 7 + previous,
+                                period: period, width: length, inset: inset)
             } else {
                 stationary(line, length: length, inset: inset)
             }
         } else {
-            let strip = messageStrip(String(repeating: unit, count: 1 + previous) + line)
             #if canImport(SwiftUICore)
             if #available(iOS 18.0, *), let face = Self.stopwatchFont {
-                stopwatchStrip(strip, period: period, width: length, face: face, previous: previous, inset: inset)
+                // This face shapes the final s.cc digits into one invisible prefix.
+                horizontalStrip(line, units: 1 + previous, ruler: .custom(face, fixedSize: period / 24),
+                                prefixPeriods: 1 + previous, period: period, width: length, inset: inset,
+                                showsHours: false)
             } else {
-                gateOrStationary(strip, line: line, period: period, width: length, previous: previous, inset: inset)
+                gateOrStationary(repeatedLine(line, units: 1 + previous), line: line, period: period, width: length, previous: previous, inset: inset)
             }
             #else
-            gateOrStationary(strip, line: line, period: period, width: length, previous: previous, inset: inset)
+            gateOrStationary(repeatedLine(line, units: 1 + previous), line: line, period: period, width: length, previous: previous, inset: inset)
             #endif
         }
+    }
+
+    // An inkless one-em glyph gives the clock and the visible copies the same
+    // fractional spacing, independent of the message font or bitmap size.
+    static func spacer(_ length: CGFloat) -> Text {
+        let glyph = length > 0 ? "\u{E000}" : "\u{200B}"
+        return Text(verbatim: glyph).font(.custom(spacingFont ?? "MarqueeRepeatSpace-Regular",
+                                                   fixedSize: length > 0 ? length : 1))
+    }
+
+    private func repeatedLine(_ line: String, units: Int, endsWithGap: Bool = false) -> Text {
+        let repeated = String(repeating: line + "    ", count: units)
+        return messageStrip(endsWithGap ? repeated : repeated + line)
     }
 
     private func messageStrip(_ text: String) -> Text {
@@ -257,38 +292,83 @@ public struct LiveActivityMarquee: View {
         return CTFontCreateWithFontDescriptor(descriptor, period / 24, nil)
     }
 
-    private func speedStrip(unit: String, period: CGFloat, width: CGFloat, face: String, speed: CGFloat, previous: Int, inset: CGFloat) -> some View {
-        let base = CTFontCreateWithName(face as CFString, 14, nil)
-        let ruler = Font(Self.speedFont(base, period: period, pointsPerSecond: speed))
-        // Each of the seven positional digits contributes less than one full
-        // width. Eight copies keep the viewport filled at every combination.
-        let message = messageStrip(String(repeating: unit, count: 8 + previous))
-        return clockStrip(systemClock, ruler: ruler, strip: message, prefixPeriods: 7 + previous, period: period, width: width, inset: inset)
-    }
-
-    private var systemClock: Text {
+    private func clock(startingAt date: Date, showsHours: Bool = true) -> Text {
         #if canImport(SwiftUICore)
         if #available(iOS 18.0, *) {
             return Text(.currentDate, format: .stopwatch(
-                startingAt: startedAt, showsHours: true, maxFieldCount: 4, maxPrecision: .milliseconds(10)
+                startingAt: date, showsHours: showsHours, maxFieldCount: 4, maxPrecision: .milliseconds(10)
             ))
         }
         #endif
-        return Text(startedAt, style: .timer)
+        return Text(date, style: .timer)
+    }
+
+    @ViewBuilder
+    private func horizontalStrip(
+        _ line: String, units: Int, endsWithGap: Bool = false, ruler: Font, prefixPeriods: Int,
+        period: CGFloat, width: CGFloat, inset: CGFloat, showsHours: Bool = true
+    ) -> some View {
+        let strip = endsWithGap ? repeatedLine(line, units: units, endsWithGap: true) : messageStrip(line)
+        let row = { (date: Date) in
+            let timer = clock(startingAt: date, showsHours: showsHours)
+            return anchoredCopies(strip, clock: timer, ruler: ruler, count: endsWithGap ? 1 : units + 1,
+                                  prefixPeriods: prefixPeriods, period: period, width: width, inset: inset)
+        }
+        #if canImport(SwiftUICore)
+        // Limit the repeated text archived in each layer to three short lines and their gaps.
+        if #available(iOS 18.0, *), line.utf8.count <= Self.shortLineBytes,
+           (units + (endsWithGap ? 0 : 1)) * (line.utf8.count + 4) <= 3 * (Self.shortLineBytes + 4),
+           !Self.hasColorGlyphs(in: line, font: typeface) {
+            sampledRow(row)
+        } else {
+            row(startedAt)
+        }
+        #else
+        row(startedAt)
+        #endif
+    }
+
+    // WidgetKit can shape a repeated Text with a different pitch than UIKit.
+    // Give each copy its own fixed origin so both endpoints share the same leading edge.
+    func anchoredCopies(_ strip: Text, clock: Text, ruler: Font, count: Int, prefixPeriods: Int,
+                        period: CGFloat, width: CGFloat, inset: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            ForEach(0..<count, id: \.self) { copy in
+                clockStrip(clock, ruler: ruler, strip: strip, prefixPeriods: prefixPeriods - copy,
+                           period: period, width: width, inset: inset)
+            }
+        }
     }
 
     #if canImport(SwiftUICore)
-    @available(iOS 18.0, *)
-    private func stopwatchStrip(_ strip: Text, period: CGFloat, width: CGFloat, face: String, previous: Int, inset: CGFloat) -> some View {
-        // The font shapes the final s.cc digits into one invisible prefix.
-        // At this size its advance decreases by period/1,000 per centisecond.
-        let rulerFont = Font.custom(face, fixedSize: period / 24)
-        let clock = Text(.currentDate, format: .stopwatch(
-            startingAt: startedAt, showsHours: false, maxFieldCount: 4, maxPrecision: .milliseconds(10)
-        ))
-        return clockStrip(clock, ruler: rulerFont, strip: strip, prefixPeriods: 1 + previous, period: period, width: width, inset: inset)
+    private func sampledRow<Row: View>(_ row: @escaping (Date) -> Row) -> some View {
+        Rectangle().fill(.foreground).mask {
+            ZStack {
+                Color.black
+                // A full line per clock keeps its position independent of the other clocks.
+                ForEach(0..<2, id: \.self) { sample in
+                    row(startedAt.addingTimeInterval((Double(sample) - 0.5) * 0.005))
+                        .foregroundStyle(.white)
+                        .opacity(0.5)
+                        .blendMode(.plusLighter)
+                }
+            }
+            .compositingGroup()
+            .luminanceToAlpha()
+        }
     }
     #endif
+
+    static func hasColorGlyphs(in line: String, font: UIFont) -> Bool {
+        let attributed = NSAttributedString(string: line, attributes: [.font: font])
+        let shaped = CTLineCreateWithAttributedString(attributed)
+        // Core Text resolves fallback fonts and emoji presentation selectors when shaping.
+        return (CTLineGetGlyphRuns(shaped) as! [CTRun]).contains { run in
+            let attributes = CTRunGetAttributes(run) as NSDictionary
+            guard let face = attributes[kCTFontAttributeName] else { return true }
+            return CTFontGetSymbolicTraits(face as! CTFont).contains(.traitColorGlyphs)
+        }
+    }
 
     private func clockStrip(
         _ clock: Text, ruler: Font, strip: Text, prefixPeriods: Int, period: CGFloat, width: CGFloat, inset: CGFloat
@@ -297,7 +377,7 @@ public struct LiveActivityMarquee: View {
         let directionMark = Text(verbatim: "\u{200E}").font(ruler)
         return Text("\(directionMark)\(clock.font(ruler))\(strip)")
             .lineLimit(1)
-            .frame(width: CGFloat(2 * prefixPeriods + 1) * period + 2, height: height, alignment: .leading)
+            .frame(width: CGFloat(2 * max(1, prefixPeriods) + 1) * period + 2, height: height, alignment: .leading)
             .offset(x: -CGFloat(prefixPeriods) * period + inset)
             .frame(width: width, height: height, alignment: .leading)
             .clipped()

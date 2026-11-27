@@ -43,24 +43,8 @@ private struct NowPlayingCard: View {
         VStack(spacing: isExpanded ? 1 : 7) {
             HStack(spacing: 4) {
                 RecordCover().frame(width: coverSize, height: coverSize)
-                GeometryReader { area in
-                    let group = WidgetMarqueeGroup(items: [
-                        .init(state.track.title, viewportWidth: area.size.width,
-                              horizontalFont: .systemFont(ofSize: 18, weight: .semibold)),
-                        .init(state.track.artist, viewportWidth: area.size.width,
-                              horizontalFont: .systemFont(ofSize: 18))
-                    ], startedAt: state.titleStartedAt, pointsPerSecond: 28,
-                       timing: .easeInOut, pauseBetweenLoops: 2)
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(group.rows) { row in
-                            LiveActivityMarquee(row)
-                                .foregroundStyle(row.id == 0 ? .white : secondaryColor)
-                        }
-                    }
-                    .marqueeEdgeFade(length: 6)
-                    .frame(maxHeight: .infinity, alignment: .center)
-                }
-                .frame(height: coverSize)
+                NowPlayingLabels(state: state)
+                    .frame(height: coverSize)
                 playbackIndicator
                     .frame(width: 30)
                     .offset(y: isExpanded ? 0 : -10)
@@ -187,6 +171,71 @@ private struct NowPlayingCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: label))
+    }
+}
+
+private extension PlayerMotion {
+    var timing: WidgetMarqueeTiming { style == .easeInOut ? .easeInOut : .linear }
+
+    var ramps: MarqueeRamps? {
+        guard style == .custom else { return nil }
+        return .init(acceleration: .init(duration: acceleration, curve: curve(accelerationCurve)),
+                     deceleration: .init(duration: deceleration, curve: curve(decelerationCurve)))
+    }
+
+    private func curve(_ value: PlayerCurve) -> MarqueeRamps.Curve {
+        switch value {
+        case .linear: return .linear
+        case .easeIn: return .easeIn
+        case .easeOut: return .easeOut
+        }
+    }
+}
+
+private struct NowPlayingLabels: View {
+    let state: NowPlayingAttributes.ContentState
+
+    var body: some View {
+        let settings = state.configuration
+        let vertical = settings.direction == .vertical
+        let axis: MarqueeAxis = vertical ? .vertical : .horizontal
+        let layout = vertical ? AnyLayout(HStackLayout(alignment: .top, spacing: 8))
+                              : AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+        GeometryReader { area in
+            let rows = [settings.titleRow, settings.artistRow]
+            let texts = [state.track.title, state.track.artist]
+            layout {
+                if settings.synchronized {
+                    let length = vertical ? area.size.height : area.size.width
+                    let items = rows.indices.map { index in
+                        let row = rows[index]
+                        return WidgetMarqueeGroup.Item(texts[index], pointsPerSecond: row.speed.map { CGFloat($0) },
+                            timing: row.motion?.timing, viewportLength: length, horizontalFont: row.font,
+                            repeatSpacing: row.spacing.map { CGFloat($0) }, ramps: row.motion?.ramps)
+                    }
+                    let group = WidgetMarqueeGroup(items: items, startedAt: state.titleStartedAt,
+                        pointsPerSecond: settings.speed ?? 28, timing: settings.motion.timing,
+                        pauseBetweenLoops: settings.pause, axis: axis, repeatSpacing: settings.spacing.map { CGFloat($0) },
+                        ramps: settings.motion.ramps)
+                    ForEach(group.rows) { row in
+                        LiveActivityMarquee(row)
+                            .foregroundStyle(row.id == 0 ? Color.white : Color.white.opacity(0.55))
+                    }
+                } else {
+                    ForEach(rows.indices, id: \.self) { index in
+                        let row = rows[index]
+                        let motion = row.motion ?? settings.motion
+                        LiveActivityMarquee(texts[index], startedAt: state.titleStartedAt,
+                            pointsPerSecond: (row.speed ?? settings.speed).map { CGFloat($0) }, timing: motion.timing,
+                            pauseBetweenLoops: settings.pause, axis: axis, horizontalFont: row.font,
+                            repeatSpacing: (row.spacing ?? settings.spacing).map { CGFloat($0) }, ramps: motion.ramps)
+                            .foregroundStyle(index == 0 ? Color.white : Color.white.opacity(0.55))
+                    }
+                }
+            }
+            .marqueeEdgeFade(length: settings.fade, clearance: settings.clearance)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        }
     }
 }
 

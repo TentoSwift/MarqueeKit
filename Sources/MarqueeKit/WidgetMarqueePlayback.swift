@@ -49,13 +49,12 @@ enum WidgetMarqueePlayback {
         let movingFraction = cycle.isFinite
             ? travelDuration / cycle
             : (travelDuration / 2) / (travelDuration / 2 + pause / 2)
-        // Align a standalone stop to a knot so a linear pass never leaks
-        // into the hold. The first 32 ticks are all knots, preserving the
-        // native-clock precision of the restart after rotating the phase.
+        // Rotate each row's sample grid to place its own stop exactly on a
+        // knot. Otherwise interpolation can keep a row moving into its hold,
+        // especially with an instantaneous stop and a long sibling or pause.
+        // The first 32 ticks are knots, so the restart is also represented.
         let stop = min(phaseCount, max(1, Int((movingFraction * Double(phaseCount)).rounded())))
-        let shift = groupMotion == nil
-            ? ((groupSamples.first { $0.tick >= stop }?.tick ?? stop) - stop)
-            : 0
+        let shift = (groupSamples.first { $0.tick >= stop }?.tick ?? stop) - stop
         for bit in 0..<5 where shift & (1 << bit) != 0 {
             features.append([kCTFontOpenTypeFeatureTag: "SHF" + String(bit), kCTFontOpenTypeFeatureValue: 1])
         }
@@ -64,14 +63,13 @@ enum WidgetMarqueePlayback {
             let tick = relative < 0 ? relative + phaseCount : relative
             let phase = Double(tick) / Double(phaseCount)
             let progress: Double
-            if let groupMotion {
-                progress = groupMotion.progress(at: phase * cycle)
-            } else if tick == 0 {
+            if tick == 0 {
                 progress = 0
             } else if tick >= stop {
                 progress = 1
             } else {
-                progress = timing.progress(min(1, phase / movingFraction))
+                let fraction = min(1, phase / movingFraction)
+                progress = groupMotion?.progress(at: fraction * travelDuration) ?? timing.progress(fraction)
             }
             return progress < 1 ? (sample.axis, 1 - progress) : nil
         })

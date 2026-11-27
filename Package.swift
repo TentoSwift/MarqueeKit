@@ -14,8 +14,9 @@ let package = Package(
             resources: [
                 .copy("Resources/WidgetMarqueeStopwatch.ttf"),
                 .copy("Resources/WidgetMarqueeSpeed.ttf"),
-                .copy("Resources/WidgetMarqueePlayback.ttf"),
-                .copy("Resources/WidgetMarqueeTimerGate.ttf")
+                .copy("Resources/WidgetMarqueePlayback.woff2"),
+                .copy("Resources/WidgetMarqueeTimerGate.ttf"),
+                .copy("Resources/MarqueeRepeatSpace.ttf")
             ]
         ),
         .target(name: "WidgetMarquee", dependencies: ["MarqueeKit"]),

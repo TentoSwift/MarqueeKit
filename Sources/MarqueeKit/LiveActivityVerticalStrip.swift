@@ -36,7 +36,7 @@ enum LiveActivityVerticalStrip {
         return result
     }
 
-    static func unit(for line: String) -> Text? {
+    static func unit(for line: String, repeatSpacing: CGFloat? = nil) -> Text? {
         guard let tiles = tiles(for: line) else { return nil }
         let advance = WidgetMarqueeMetrics.verticalAdvance
         let thickness = WidgetMarqueeMetrics.columnWidth
@@ -50,7 +50,7 @@ enum LiveActivityVerticalStrip {
         ]
         var chunks = [Text]()
         for (index, tile) in tiles.enumerated() {
-            let gap = index == tiles.count - 1 ? WidgetMarqueeMetrics.gap : 0
+            let gap = index == tiles.count - 1 && repeatSpacing == nil ? WidgetMarqueeMetrics.gap : 0
             let size = CGSize(width: CGFloat(tile.count) * advance + gap, height: thickness)
             let image = UIGraphicsImageRenderer(size: size, format: format).image { renderer in
                 let context = renderer.cgContext
@@ -67,6 +67,7 @@ enum LiveActivityVerticalStrip {
             // Tint text with the caller's foreground style and preserve native emoji colors.
             chunks.append(Text(Image(uiImage: image).renderingMode(tile.colorEmoji ? .original : .template)))
         }
+        if let repeatSpacing { chunks.append(LiveActivityMarquee.spacer(repeatSpacing)) }
         return LiveActivityMarquee.joined(chunks)
     }
 

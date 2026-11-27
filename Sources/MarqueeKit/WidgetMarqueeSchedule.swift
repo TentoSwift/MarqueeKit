@@ -11,6 +11,9 @@ public struct WidgetMarqueeSchedule: Sendable {
     /// Custom font for horizontal text. The default is 14-point monospaced.
     public let horizontalFont: UIFont?
 
+    /// Distance in points between consecutive copies. Defaults to 28 points.
+    public let repeatSpacing: CGFloat
+
     /// Base interval between scheduled positions in seconds. A pause can add stop and restart entries.
     public let secondsPerStep: TimeInterval
 
@@ -20,13 +23,16 @@ public struct WidgetMarqueeSchedule: Sendable {
     /// The motion profile used within each full pass.
     public let timing: WidgetMarqueeTiming
 
+    /// Custom ramps used in place of the preset timing curve.
+    public let ramps: MarqueeRamps?
+
     /// Seconds spent at the start of the text after each pass.
     public let pauseBetweenLoops: TimeInterval
 
     // Legacy linear steps use nil. A zero duration represents stationary text.
     let passDuration: TimeInterval?
     private var groupCycle: (start: Date, duration: TimeInterval)?
-    private var groupMotion: WidgetMarqueeGroup.Motion?
+    private var motion: WidgetMarqueeGroup.Motion?
 
     /// Creates a two-second schedule with the specified number of positions per pass.
     ///
@@ -38,48 +44,63 @@ public struct WidgetMarqueeSchedule: Sendable {
 
     /// Creates a two-second schedule with the supplied timing profile.
     public init(stepsPerPass: Int = 12, timing: WidgetMarqueeTiming = .linear,
-                pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil) {
+                pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil,
+                repeatSpacing: CGFloat? = nil, ramps: MarqueeRamps? = nil) {
         precondition((2...3_600).contains(stepsPerPass), "stepsPerPass must be between 2 and 3,600")
         self.axis = axis
         self.horizontalFont = horizontalFont
+        self.repeatSpacing = WidgetMarqueeMetrics.normalizedRepeatSpacing(repeatSpacing) ?? WidgetMarqueeMetrics.gap
         self.stepsPerPass = stepsPerPass
         self.secondsPerStep = 2
         self.timing = timing
         self.pauseBetweenLoops = Self.validPause(pauseBetweenLoops)
-        self.passDuration = timing == .linear && self.pauseBetweenLoops == 0 ? nil : Double(stepsPerPass) * 2
+        self.ramps = ramps
+        let travel = Double(stepsPerPass) * 2
+        self.motion = ramps.flatMap { WidgetMarqueeGroup.Motion.custom($0, baseTravel: travel, fixedDuration: true) }
+        self.passDuration = timing == .linear && self.pauseBetweenLoops == 0 && ramps == nil ? nil : travel
     }
 
     /// Uses a speed in layout points per second, or the default text-dependent duration if omitted.
-    /// Speed is the average during travel. The pause is additional time at the start of the text.
+    /// Speed is the travel average for preset timing, and the cruise speed with custom ramps.
+    /// The pause is additional time at the start of the text.
     /// Use this schedule with the same text. Nonpositive and nonfinite speeds keep the line stationary.
     public init(
         for text: String, pointsPerSecond: CGFloat? = nil,
         timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
-        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil, repeatSpacing: CGFloat? = nil,
+        ramps: MarqueeRamps? = nil
     ) {
         guard let pointsPerSecond else {
             self = WidgetMarqueeSchedule(
                 stepsPerPass: min(3_600, max(12, text.count / 8)), timing: timing,
-                pauseBetweenLoops: pauseBetweenLoops, axis: axis, horizontalFont: horizontalFont
+                pauseBetweenLoops: pauseBetweenLoops, axis: axis, horizontalFont: horizontalFont, repeatSpacing: repeatSpacing,
+                ramps: ramps
             )
             return
         }
         let line = WidgetMarqueeMetrics.line(from: text)
-        let period = WidgetMarqueeMetrics.contentLength(for: line, axis: axis, horizontalFont: horizontalFont) + WidgetMarqueeMetrics.gap
+        let spacing = WidgetMarqueeMetrics.normalizedRepeatSpacing(repeatSpacing) ?? WidgetMarqueeMetrics.gap
+        let period = WidgetMarqueeMetrics.contentLength(for: line, axis: axis, horizontalFont: horizontalFont) + spacing
         let duration = pointsPerSecond.isFinite && pointsPerSecond > 0 ? Double(period / pointsPerSecond) : 0
-        self.init(travel: duration, timing: timing, pause: pauseBetweenLoops, axis: axis, horizontalFont: horizontalFont)
+        let motion = ramps.flatMap { WidgetMarqueeGroup.Motion.custom($0, baseTravel: duration, fixedDuration: false) }
+        self.init(travel: motion?.duration ?? duration, timing: timing, pause: pauseBetweenLoops, axis: axis,
+                  horizontalFont: horizontalFont, repeatSpacing: spacing, ramps: ramps, motion: motion)
     }
 
     init(_ row: WidgetMarqueeGroup.Row) {
         self.init(travel: row.widgetTravelDuration, timing: row.timing,
-                  pause: row.widgetCycleDuration - row.widgetTravelDuration, axis: row.axis, horizontalFont: row.horizontalFont)
+                  pause: row.widgetCycleDuration - row.widgetTravelDuration, axis: row.axis, horizontalFont: row.horizontalFont,
+                  repeatSpacing: row.repeatSpacing ?? WidgetMarqueeMetrics.gap, ramps: row.ramps, motion: row.widgetMotion)
         groupCycle = (row.startedAt, row.widgetCycleDuration)
-        groupMotion = row.widgetMotion
     }
 
-    private init(travel duration: TimeInterval, timing: WidgetMarqueeTiming, pause: TimeInterval, axis: MarqueeAxis, horizontalFont: UIFont?) {
+    private init(travel duration: TimeInterval, timing: WidgetMarqueeTiming, pause: TimeInterval, axis: MarqueeAxis,
+                 horizontalFont: UIFont?, repeatSpacing: CGFloat, ramps: MarqueeRamps?, motion: WidgetMarqueeGroup.Motion?) {
+        self.ramps = ramps
+        self.motion = motion
         self.axis = axis
         self.horizontalFont = horizontalFont
+        self.repeatSpacing = repeatSpacing
         self.timing = timing
         self.pauseBetweenLoops = Self.validPause(pause)
         guard duration.isFinite, duration > 0 else {
@@ -150,7 +171,7 @@ public struct WidgetMarqueeSchedule: Sendable {
 
     private func insertBoundaries(in range: Range<Date>, minimumInterval: TimeInterval,
                                   into dates: inout Set<Date>) {
-        guard let travel = passDuration, groupCycle != nil || pauseBetweenLoops > 0 else { return }
+        guard let travel = passDuration, groupCycle != nil || motion != nil || pauseBetweenLoops > 0 else { return }
         let origin = groupCycle?.start ?? Date(timeIntervalSinceReferenceDate: 0)
         if groupCycle != nil, range.contains(origin) { dates.insert(origin) }
         guard cycleDuration >= minimumInterval else { return }
@@ -163,8 +184,8 @@ public struct WidgetMarqueeSchedule: Sendable {
             let lapStart = origin.addingTimeInterval(lap * cycleDuration)
             guard lapStart < range.upperBound else { break }
             if range.contains(lapStart) { dates.insert(lapStart) }
-            if let groupMotion {
-                for boundary in [groupMotion.accelerationDuration, groupMotion.decelerationStart] {
+            if let motion {
+                for boundary in [motion.accelerationDuration, motion.decelerationStart] {
                     let change = lapStart.addingTimeInterval(boundary)
                     if range.contains(change) { dates.insert(change) }
                 }
@@ -181,25 +202,17 @@ public struct WidgetMarqueeSchedule: Sendable {
     // A standalone dated view has no following entry. Use the actual interval
     // since the preceding grid, stop, or restart for its transition to that date.
     func previousSample(before date: Date) -> Date {
-        guard groupCycle != nil || pauseBetweenLoops > 0, let pass = passDuration, cycleDuration >= secondsPerStep else {
+        guard groupCycle != nil || motion != nil || pauseBetweenLoops > 0, let pass = passDuration, cycleDuration >= secondsPerStep else {
             return date.addingTimeInterval(-secondsPerStep)
         }
         let time = date.timeIntervalSinceReferenceDate
         let previousGrid = (ceil(time / secondsPerStep) - 1) * secondsPerStep
         let elapsed = elapsedInCycle(at: date)
         let epsilon = max(1e-12, time.ulp * 2)
-        let sinceBoundary: TimeInterval
-        if elapsed <= epsilon || cycleDuration - elapsed <= epsilon {
-            sinceBoundary = pauseBetweenLoops > 0 ? pauseBetweenLoops : cycleDuration - (groupMotion?.decelerationStart ?? 0)
-        } else if elapsed > pass + epsilon {
-            sinceBoundary = elapsed - pass
-        } else {
-            let previousBoundary = groupMotion.flatMap {
-                [$0.accelerationDuration, $0.decelerationStart].last { $0 < elapsed - epsilon }
-            } ?? 0
-            sinceBoundary = elapsed - previousBoundary
-        }
-        return Date(timeIntervalSinceReferenceDate: max(previousGrid, time - sinceBoundary))
+        let cycleTime = elapsed <= epsilon || cycleDuration - elapsed <= epsilon ? cycleDuration : elapsed
+        let boundaries = [motion?.accelerationDuration, motion?.decelerationStart, pass]
+        let previous = boundaries.compactMap { $0 }.last { $0 < cycleTime - epsilon } ?? 0
+        return Date(timeIntervalSinceReferenceDate: max(previousGrid, time - (cycleTime - previous)))
     }
 
     func lane(at date: Date, copy: Int) -> Int {
@@ -215,7 +228,7 @@ public struct WidgetMarqueeSchedule: Sendable {
         let coordinate = cycleCoordinate(at: date)
         let lap = floor(coordinate)
         let elapsed = (coordinate - lap) * cycleDuration
-        let progress = groupMotion?.progress(at: elapsed) ?? timing.progress(min(1, elapsed / duration))
+        let progress = motion?.progress(at: elapsed) ?? timing.progress(min(1, elapsed / duration))
         let lane = (lap + Double(copy) + progress).truncatingRemainder(dividingBy: 3)
         return lane < 0 ? lane + 3 : lane
     }
@@ -229,11 +242,19 @@ public struct WidgetMarqueeSchedule: Sendable {
         return (coordinate - floor(coordinate)) * cycleDuration
     }
 
-    var cruiseFactor: Double? { groupMotion?.cruiseFactor }
+    var cruiseFactor: Double? { motion?.cruiseFactor }
 
-    func speedFactor(at date: Date, pass: TimeInterval) -> Double {
+    func speedFactor(at date: Date, pass: TimeInterval, arriving: Bool = false) -> Double {
         let elapsed = elapsedInCycle(at: date)
-        return groupMotion?.speedFactor(at: elapsed) ?? timing.speedFactor(min(1, elapsed / pass))
+        if arriving, let motion {
+            // Use the last ramp's incoming slope, even when the endpoint
+            // wraps to zero and the next lap starts at a different speed.
+            let tolerance = 2 * date.timeIntervalSinceReferenceDate.ulp
+            if abs(elapsed - pass) <= tolerance || (pauseBetweenLoops == 0 && elapsed <= tolerance) {
+                return motion.decelerationDuration == 0 ? motion.cruiseFactor : 0
+            }
+        }
+        return motion?.speedFactor(at: elapsed) ?? timing.speedFactor(min(1, elapsed / pass))
     }
 
     private func cycleCoordinate(at date: Date) -> Double {

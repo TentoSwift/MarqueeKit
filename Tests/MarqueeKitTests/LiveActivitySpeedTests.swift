@@ -5,7 +5,7 @@ import XCTest
 
 final class LiveActivitySpeedTests: XCTestCase {
     private func bundledFont(_ name: String) throws -> CTFont {
-        let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "ttf"))
+        let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: name == "WidgetMarqueePlayback" ? "woff2" : "ttf"))
         let provider = try XCTUnwrap(CGDataProvider(url: url as CFURL))
         let graphics = try XCTUnwrap(CGFont(provider))
         return CTFontCreateWithGraphicsFont(graphics, 14, nil, nil)
@@ -22,11 +22,21 @@ final class LiveActivitySpeedTests: XCTestCase {
     }
 
     func testPlaybackResourceStaysCompactForLiveActivityArchives() throws {
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "WidgetMarqueePlayback", withExtension: "ttf"))
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "WidgetMarqueePlayback", withExtension: "woff2"))
         let size = try XCTUnwrap(url.resourceValues(forKeys: [.fileSizeKey]).fileSize)
         // The system archives this font with the activity views. A 3.2 MiB
         // font produced a rejected archive on device. Leave room for other views.
-        XCTAssertLessThan(size, 256 * 1024)
+        XCTAssertLessThan(size, 16 * 1024)
+    }
+
+    @MainActor
+    func testColorGlyphDetectionUsesTheResolvedFontOfEachRun() {
+        for font in [UIFont.systemFont(ofSize: 18, weight: .semibold), WidgetMarqueeMetrics.font] {
+            XCTAssertFalse(LiveActivityMarquee.hasColorGlyphs(in: "東京 012 · שלום · ✈\u{FE0E}", font: font))
+            for text in ["東京 ✈\u{FE0F}", "Family 👨‍👩‍👧‍👦", "Flag 🇯🇵", "Track 1️⃣"] {
+                XCTAssertTrue(LiveActivityMarquee.hasColorGlyphs(in: text, font: font), text)
+            }
+        }
     }
 
     func testStandaloneStopBetweenCurveSamplesHoldsUntilTheNextLap() throws {
@@ -183,6 +193,32 @@ final class LiveActivitySpeedTests: XCTestCase {
                 XCTAssertEqual(actual, expected, accuracy: 0.5, "row \(index) at \(stamp)")
                 if elapsed > travel { XCTAssertEqual(actual, 0, accuracy: 0.001) }
             }
+        }
+    }
+
+    func testClockFollowsCustomRampsIncludingHoldAndMinuteCarry() throws {
+        let base = try bundledFont("WidgetMarqueePlayback")
+        let ramps = MarqueeRamps(acceleration: .init(duration: 3, curve: .easeIn),
+                                 deceleration: .init(duration: 1.5, curve: .easeOut))
+        let motion = try XCTUnwrap(WidgetMarqueeGroup.Motion.custom(ramps, baseTravel: 10, fixedDuration: false))
+        let font = WidgetMarqueePlayback.font(base, period: 100, travelDuration: motion.duration, pause: 3.5,
+                                              timing: .linear, groupMotion: motion)
+        for (stamp, elapsed) in [("0:01.50", 1.5), ("0:03.00", 3), ("0:05.00", 5), ("0:11.75", 11.75),
+                                 ("0:59.75", 11.75), ("1:00.00", 12), ("1:00.25", 12.25)] {
+            XCTAssertEqual(advance(stamp, font: font), 100 * (1 - motion.progress(at: elapsed)), accuracy: 0.12, stamp)
+        }
+        for stamp in ["0:12.50", "0:15.00", "1:00.50", "1:01.75"] {
+            XCTAssertEqual(advance(stamp, font: font), 0, accuracy: 0.015, stamp)
+        }
+        // A short group member stops between two ordinary grid knots. Its
+        // zero-duration release must hold exactly even during a long cycle.
+        let release = MarqueeRamps(acceleration: .init(duration: 0.5))
+        let short = try XCTUnwrap(WidgetMarqueeGroup.Motion.custom(release, baseTravel: 4, fixedDuration: false))
+        let shortFont = WidgetMarqueePlayback.font(base, period: 200, travelDuration: short.duration, pause: 0,
+                                                   timing: .linear, cycleDuration: 128, groupMotion: short)
+        XCTAssertGreaterThan(advance("0:04.00", font: shortFont), 8)
+        for stamp in ["0:04.25", "0:04.35", "0:04.50", "1:00.00"] {
+            XCTAssertEqual(advance(stamp, font: shortFont), 0, accuracy: 0.01, stamp)
         }
     }
 

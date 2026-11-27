@@ -2,18 +2,20 @@
 
 MarqueeKitはSwiftUIアプリ、ホーム画面Widget、Live Activityで文字列を自動スクロールするSwift Packageです。横送りでは1行を左に、縦送りでは文字を縦1列に並べて上に送ります。表示領域に収まる文章は静止し、長い文章は末尾から先頭に戻って繰り返します。対応環境はiOS 17以降、Swift tools 5.9以降です。
 
+実機では、次の周回が始まるときに曲名が1フレームだけ暗くなることがあります。iPhone Duoでは、展開したDynamic Islandの描画データがOSの上限を超えると、Live Activityが終了する場合があります。
+
 ![ロック画面で曲名とアーティスト名が左に流れ、先頭に戻って一緒に再開する様子](Documentation/now-playing.gif)
 
-[スクロールの滑らかさを60 fpsのMP4で確認する](https://github.com/TentoSwift/MarqueeKit/releases/download/1.7.0/now-playing.mp4)
+動画は開発中の再生カードをiPhoneシミュレータで録画したものです。[ロック画面のデモを見る（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.8.0-beta.1/now-playing.mp4)
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/MarqueeKit.git` を指定し、バージョン `1.7.0` 以降を選びます。マーキーを表示するアプリやWidget Extensionのターゲットに製品 `MarqueeKit` を追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/MarqueeKit.git` を指定します。**Dependency Rule** で **Exact Version** を選び、`1.8.0-beta.1` を入力します。マーキーを表示するアプリやWidget Extensionのターゲットに製品 `MarqueeKit` を追加します。
 
 Swift Packageから利用する場合は、`Package.swift` の `dependencies` にリポジトリを追加します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/MarqueeKit.git", from: "1.7.0")
+.package(url: "https://github.com/TentoSwift/MarqueeKit.git", exact: "1.8.0-beta.1")
 ```
 
 利用するターゲットの `dependencies` には製品を指定します。
@@ -33,7 +35,7 @@ Swift Packageから利用する場合は、`Package.swift` の `dependencies` �
 
 ![展開したDynamic Islandで曲名とアーティスト名が流れる様子](Documentation/now-playing-island.gif)
 
-[スクロールの滑らかさを60 fpsのMP4で確認する](https://github.com/TentoSwift/MarqueeKit/releases/download/1.7.0/now-playing-island.mp4)
+[展開したDynamic Islandのデモを見る（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.8.0-beta.1/now-playing-island.mp4)
 
 </details>
 
@@ -71,10 +73,20 @@ GeometryReader { area in
 
 ### 再生カードを試す
 
-1. アプリのInfo.plistで `NSSupportsLiveActivities` を有効にします。
-2. 曲とボタンの処理を定義する [NowPlayingAttributes.swift](Examples/NowPlayingLiveActivity/NowPlayingAttributes.swift) をアプリとWidget Extensionの両方に追加します。
-3. カードのレイアウトを定義する [NowPlayingLiveActivity.swift](Examples/NowPlayingLiveActivity/NowPlayingLiveActivity.swift) を拡張に追加し、拡張の `@main WidgetBundle` の `body` に `NowPlayingLiveActivity()` を登録します。
-4. アプリをフォアグラウンドで開き、ボタンなどから `try NowPlayingAttributes.start()` を呼びます。
+1. Xcodeで同梱の [MarqueePlayer.xcodeproj](Examples/NowPlayingLiveActivity/MarqueePlayer.xcodeproj) を開き、`MarqueePlayer` スキームを選びます。実機で試す場合は、アプリとWidget Extensionの両方で署名用のTeamを選びます。
+2. アプリで曲を選び、曲名やアーティスト名を編集して「再生カードを開始」をタップします。ロック画面を表示するか、Dynamic Islandを長押しして動きを確かめます。
+3. 速度、加速・減速の時間と曲線、待ち時間、周回の余白、端のフェードを調整できます。縦送りにしたり、2行を個別に周回させたりすることもできます。「曲名の設定」と「アーティスト名の設定」では、行ごとに速度、動き方、余白、横送りのフォントを変えられます。表示中のカードには「変更をカードに反映」で適用します。
+4. 編集した設定をコードで使うには「Swiftコードを表示・コピー」を開き、「Swiftコードをコピー」をタップします。コピーした `PlayerMarquees` をWidget Extensionに貼り付け、Live Activityの開始日時を `startedAt` に渡します。アプリを開き直すと前回の設定が残っています。「設定を初期値に戻す」で最初の状態に戻せます。
+
+自分のプロジェクトに組み込む場合は、アプリのInfo.plistで `NSSupportsLiveActivities` を有効にし、ファイルを次のターゲットに追加します。
+
+| ターゲット | ファイルと役割 |
+| --- | --- |
+| アプリ | 設定画面の [MarqueePlayerApp.swift](Examples/NowPlayingLiveActivity/MarqueePlayerApp.swift) とコード生成の [MarqueePlayerCode.swift](Examples/NowPlayingLiveActivity/MarqueePlayerCode.swift)。サンプルの `@main` はアプリのエントリポイントです。 |
+| アプリとWidget Extension | 曲、設定、カードの操作を共有する [NowPlayingAttributes.swift](Examples/NowPlayingLiveActivity/NowPlayingAttributes.swift) |
+| Widget Extension | カードを描画する [NowPlayingLiveActivity.swift](Examples/NowPlayingLiveActivity/NowPlayingLiveActivity.swift)。拡張の `WidgetBundle` に `NowPlayingLiveActivity()` を登録します。 |
+
+既存のアプリから初期設定でカードを開始するだけなら、フォアグラウンドで `try NowPlayingAttributes.start()` を呼べます。設定を送る前に、アプリは属性と状態の合計が4,096バイト以内か確かめます。
 
 カードのボタンでお気に入り、前の曲、再生・一時停止、次の曲を操作できます。サンプルは架空の3曲を切り替えます。再生時間とボタンはカード内の状態に連動し、音声再生は含みません。右端のイヤフォンは出力先の表示例です。
 
@@ -177,7 +189,7 @@ Live Activityは描画データの大きさを抑えるため、縦1列を複数
 
 ## スクロールの速度、加減速、周回の待ち時間
 
-`pointsPerSecond` は移動中の平均速度をpt/秒で指定します。既定の `timing` は等速の `.linear` です。単独の行に `.easeInOut` を指定すると、周回の始めと終わりはゆっくり動き、中央で最も速くなります。`pauseBetweenLoops` は先頭に戻ってから次の周回までの待ち時間で、既定は0秒です。
+`pointsPerSecond` の単位はpt/秒です。`timing` で動き方を選ぶときは移動中の平均速度、`ramps` で加減速を指定するときは巡航速度を表します。既定の `timing` は等速の `.linear` です。単独の行に `.easeInOut` を指定すると、周回の始めと終わりはゆっくり動き、中央で最も速くなります。`pauseBetweenLoops` は先頭に戻ってから次の周回までの待ち時間で、既定は0秒です。
 
 ```swift
 // SwiftUIアプリ
@@ -194,6 +206,33 @@ LiveActivityMarquee(text, startedAt: startedAt, pointsPerSecond: 40,
 速度、加減速、待ち時間は個別に省略できます。速度を省略した場合、Live Activityは10秒で一周します。SwiftUIアプリとホーム画面Widgetの周期は文章の長さで決まります。たとえばLive Activityに `pauseBetweenLoops: 2` だけを指定すると、10秒かけて移動して2秒待ちます。速度が0以下または非有限の場合は静止し、負または非有限の待ち時間は0秒として扱います。
 
 iOS 27.2シミュレータのLive Activityでは、同じ文章に30、60 pt/秒を指定して、それぞれ約30、60 pt/秒で移動することを確認しました。90 pt/秒・待機2秒では、等速の行は約5.7秒で一周して約2秒静止しました。加減速のある行は同じ周期で、中央の速度は約135 pt/秒でした。[加減速と2秒待機の録画（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.3.0/live-activity-ease-and-pause.mp4)
+
+### 加速と減速を個別に指定する
+
+`ramps` で加速と減速に別々の秒数と曲線を指定できます。次の行は0.5秒で巡航速度28 pt/秒まで加速し、周回の終わりには1.5秒かけて止まります。
+
+```swift
+LiveActivityMarquee(
+    text, startedAt: startedAt, pointsPerSecond: 28, pauseBetweenLoops: 2,
+    ramps: .init(acceleration: .init(duration: 0.5, curve: .easeIn),
+                 deceleration: .init(duration: 1.5, curve: .easeOut))
+)
+```
+
+曲線は `.linear`、`.easeIn`、`.easeOut` から選べます。加速時間を0にすると最初から巡航速度で動き、減速時間を0にすると最後にすぐ止まります。加減速だけで一周分の距離を超える場合は、2つの時間を同じ割合で短くします。グループ全体にも、`WidgetMarqueeGroup.Item` の各行にも指定できます。
+
+### 文章の末尾と次の先頭の間隔
+
+`repeatSpacing` は、文章の末尾から次の先頭までに空ける余白をptで指定します。アプリ、ホーム画面Widget、Live Activityの横送りと縦送りで使えます。
+
+```swift
+LiveActivityMarquee(
+    text, startedAt: startedAt, pointsPerSecond: 28,
+    pauseBetweenLoops: 2, repeatSpacing: 24
+)
+```
+
+この例では、末尾と次の先頭の間に24 ptの余白が見えます。先頭が元の位置に戻ると、そこで2秒待ちます。`repeatSpacing: 0` なら文字列を余白なしで繰り返します。負の値は0に丸め、省略時や `nil`、非有限の値には従来の間隔を使います。
 
 ## 複数の行を一緒に再開する
 
@@ -212,16 +251,18 @@ VStack(alignment: .leading, spacing: 4) {
 
 SwiftUIアプリでは `group.rows` の各要素を `WidgetMarquee(row)` に渡します。`startedAt` はアプリの状態かLive Activityの属性に保存し、ビューを描き直すときも同じ値を使ってください。各行を独立して周回させる場合は、文章をビューに直接渡します。
 
-長さの異なる行に同じ `pointsPerSecond` と `.easeInOut` を指定すると、一緒に加速して同じ巡航速度に達します。減速するのは各行が自分の終点に近づいたときです。短い行が先頭で待っている間も、長い行はそのまま進みます。`pointsPerSecond` は移動中の平均速度なので、加減速のある行では巡航速度が指定値を少し上回ります。`.linear` の行は一周を通して指定した速度で動きます。[短い行が止まる前後の録画（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.4.2/independent-marquee-stops.mp4)
+長さの異なる行に同じ `pointsPerSecond` と `.easeInOut` を指定すると、一緒に加速して同じ巡航速度に達します。減速するのは各行が自分の終点に近づいたときです。短い行が先頭で待っている間も、長い行はそのまま進みます。この設定では `pointsPerSecond` は移動中の平均速度なので、巡航速度は指定値を少し上回ります。`.linear` の行は一周を通して指定した速度で動きます。[短い行が止まる前後の録画（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.4.2/independent-marquee-stops.mp4)
 
 横送りでは `viewportWidth` にラベルと余白を除いた本文の幅を渡してください。グループはその幅に収まる行を加減速と待ち時間の計算から除外します。縦送りでは `axis: .vertical` と `viewportLength` に本文の表示方向と高さを指定します。速度0の行もほかの行を待たせません。行によって速度や表示幅が異なる場合は `items:` を指定します。
 
 ```swift
 let group = WidgetMarqueeGroup(items: [
-    .init(title, pointsPerSecond: 30, viewportWidth: titleWidth),
+    .init(title, pointsPerSecond: 30, viewportWidth: titleWidth, repeatSpacing: 12),
     .init(subtitle, viewportWidth: subtitleWidth)
-], startedAt: startedAt, pointsPerSecond: 50, pauseBetweenLoops: 2)
+], startedAt: startedAt, pointsPerSecond: 50, pauseBetweenLoops: 2, repeatSpacing: 24)
 ```
+
+この例ではグループの余白を24 ptにし、`title` の行だけ12 ptにしています。
 
 ホーム画面Widgetで同期する場合は、プロバイダのエントリ型を `WidgetMarqueeGroupEntry` にし、`timeline` から `group.timeline()` を返します。`placeholder` と `snapshot` には `WidgetMarqueeGroupEntry(group)` を使います。1つのエントリに全行の位置が入るため、Widgetのビューでは行を順に並べます。再読み込み時にも同じ開始日時を使います。
 

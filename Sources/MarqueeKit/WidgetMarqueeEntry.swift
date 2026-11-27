@@ -31,11 +31,12 @@ public struct WidgetMarqueeEntry: TimelineEntry, Sendable {
     public init(
         _ text: String, date: Date = .now, pointsPerSecond: CGFloat? = nil,
         timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
-        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil, repeatSpacing: CGFloat? = nil,
+        ramps: MarqueeRamps? = nil
     ) {
         let schedule = WidgetMarqueeSchedule(
             for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops,
-            axis: axis, horizontalFont: horizontalFont
+            axis: axis, horizontalFont: horizontalFont, repeatSpacing: repeatSpacing, ramps: ramps
         )
         self.init(text, date: date, schedule: schedule)
     }
