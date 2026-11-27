@@ -5,51 +5,60 @@ import XCTest
 
 final class LiveActivityHeadPositionTests: XCTestCase {
     @MainActor
-    func testFirstGlyphStaysAtTheSamePixelWhenTheClockReachesTheNextCopy() throws {
-        let label = Text(verbatim: "H Marquee").font(.system(size: 17, weight: .medium))
-        let scale: CGFloat = 3
-        let widthRenderer = ImageRenderer(content: label.fixedSize())
-        widthRenderer.scale = scale
-        let shapedWidth = try XCTUnwrap(widthRenderer.uiImage).size.width
-        // Reproduce a disagreement between the rendered copy pitch and the
-        // distance encoded by the clock. Joining the copies shifts the head by 16 pt.
-        let period = shapedWidth + 16
-        let inset: CGFloat = 12
-        let viewport: CGFloat = 48
+    func testHeadPositionAndBrightnessAcrossTwoRestarts() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "WidgetMarqueePlayback", withExtension: "woff2"))
         CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
-        let data = try XCTUnwrap(CGDataProvider(url: url as CFURL))
-        let face = CTFontCreateWithGraphicsFont(try XCTUnwrap(CGFont(data)), 14, nil, nil)
-        let ruler = Font(WidgetMarqueePlayback.font(face, period: period, travelDuration: 4, pause: 2, timing: .linear))
-        let marquee = LiveActivityMarquee("H Marquee", startedAt: .distantPast)
-
-        func firstInkColumn(at stamp: String) throws -> Int {
-            let view = marquee.anchoredCopies(label, clock: Text(verbatim: stamp), ruler: ruler, count: 2,
-                                             prefixPeriods: 1, period: period, width: viewport, inset: inset)
-                .foregroundStyle(.white)
-                .background(.black)
-                .environment(\.displayScale, scale)
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = scale
-            let image = try XCTUnwrap(renderer.cgImage)
-            var pixels = [UInt8](repeating: 0, count: image.width * image.height)
-            return try pixels.withUnsafeMutableBytes { bytes in
-                let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: image.width, height: image.height,
-                                                      bitsPerComponent: 8, bytesPerRow: image.width,
-                                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue))
-                context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-                return try XCTUnwrap((0..<image.width).first { x in
-                    (0..<image.height).contains { y in bytes[y * image.width + x] > 128 }
-                }, "Missing first glyph at \(stamp)")
+        let provider = try XCTUnwrap(CGDataProvider(url: url as CFURL))
+        let base = CTFontCreateWithGraphicsFont(try XCTUnwrap(CGFont(provider)), 14, nil, nil)
+        let label = "H Marquee — 次の周回"
+        let font = UIFont.systemFont(ofSize: 17, weight: .medium)
+        let inset: CGFloat = 12
+        for gap: CGFloat? in [nil, 0, 0.5, 64] {
+            let marquee = LiveActivityMarquee(label, startedAt: .distantPast, horizontalFont: font, repeatSpacing: gap)
+            let nominal = WidgetMarqueeMetrics.liveRepeatWidth(for: label, font: font, repeatSpacing: gap)
+            let period = marquee.renderedRepeatWidth(for: label, fallback: nominal)
+            let prefix = (gap ?? nominal - WidgetMarqueeMetrics.textWidth(for: label, font: font)) < inset ? 2 : 1
+            let ruler = Font(WidgetMarqueePlayback.font(base, period: period, travelDuration: 4, pause: 2, timing: .linear))
+            let strip = marquee.horizontalContent(label, units: prefix)
+            func image(_ stamp: String) throws -> [UInt8] {
+                let view = marquee.clockStrip(Text(verbatim: stamp), ruler: ruler, strip: strip,
+                                                prefixPeriods: prefix, period: period, width: 48, inset: inset)
+                    .foregroundStyle(.white).background(.black).environment(\.displayScale, 3)
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 3
+                let image = try XCTUnwrap(renderer.cgImage)
+                var pixels = [UInt8](repeating: 0, count: image.width * image.height)
+                try pixels.withUnsafeMutableBytes { bytes in
+                    let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: image.width, height: image.height,
+                                                          bitsPerComponent: 8, bytesPerRow: image.width,
+                                                          space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue))
+                    context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+                }
+                return pixels
             }
-        }
-
-        let head = try firstInkColumn(at: "0:00.00")
-        XCTAssertGreaterThanOrEqual(head, Int(inset * scale) - 1)
-        XCTAssertLessThan(head, Int((inset + 5) * scale))
-        XCTAssertLessThan(try firstInkColumn(at: "0:00.20"), head - 4)
-        for stamp in ["0:04.00", "0:05.75", "0:06.00"] {
-            XCTAssertEqual(try firstInkColumn(at: stamp), head, "First glyph moved at \(stamp)")
+            let head = try image("0:00.00")
+            let mass = head.reduce(0) { $0 + Int($1) }
+            XCTAssertGreaterThan(mass, 0)
+            let width = 48 * 3
+            // Register the glyphs at device-pixel resolution before comparing ink.
+            // Fractional origins change antialiasing even at the same logical head.
+            func alignmentError(_ compared: [UInt8], shift: Int) -> Double {
+                var delta = 0
+                for pixel in head.indices where (4..<(width - 4)).contains(pixel % width) {
+                    delta += abs(Int(head[pixel]) - Int(compared[pixel + shift]))
+                }
+                return Double(delta) / Double(max(mass, 1))
+            }
+            XCTAssertGreaterThan(try alignmentError(image("0:00.30"), shift: 0), 0.15)
+            for stamp in ["0:04.00", "0:05.99", "0:06.00", "0:11.99", "0:12.00"] {
+                let frame = try image(stamp)
+                let ink = frame.reduce(0) { $0 + Int($1) }
+                XCTAssertEqual(Double(ink) / Double(mass), 1, accuracy: 0.05,
+                               "Ink at \(stamp), gap \(String(describing: gap))")
+                let errors = (-3...3).map { alignmentError(frame, shift: $0) }
+                XCTAssertLessThan(try XCTUnwrap(errors.min()), 0.12,
+                                  "Alignment at \(stamp), gap \(String(describing: gap))")
+            }
         }
     }
 }
