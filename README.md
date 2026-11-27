@@ -4,16 +4,16 @@ MarqueeKitはSwiftUIアプリ、ホーム画面Widget、Live Activityで文字�
 
 ![ロック画面で曲名とアーティスト名が左に流れ、先頭に戻って一緒に再開する様子](Documentation/now-playing.gif)
 
-[録画をダウンロード（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.6.1/now-playing.mp4)
+[スクロールの滑らかさを60 fpsのMP4で確認する](https://github.com/TentoSwift/MarqueeKit/releases/download/1.7.0/now-playing.mp4)
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/MarqueeKit.git` を指定し、バージョン `1.6.0` 以降を選びます。マーキーを表示するアプリやWidget Extensionのターゲットに製品 `MarqueeKit` を追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/MarqueeKit.git` を指定し、バージョン `1.7.0` 以降を選びます。マーキーを表示するアプリやWidget Extensionのターゲットに製品 `MarqueeKit` を追加します。
 
 Swift Packageから利用する場合は、`Package.swift` の `dependencies` にリポジトリを追加します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/MarqueeKit.git", from: "1.6.0")
+.package(url: "https://github.com/TentoSwift/MarqueeKit.git", from: "1.7.0")
 ```
 
 利用するターゲットの `dependencies` には製品を指定します。
@@ -26,18 +26,20 @@ Swift Packageから利用する場合は、`Package.swift` の `dependencies` �
 
 ## Live Activityで再生カードを作る
 
-冒頭の録画は同梱のサンプルをiPhoneシミュレータのロック画面に表示したものです。ロック画面と展開したDynamic Islandには、ジャケット、曲名、アーティスト名、経過時間と残り時間、再生ボタンが並びます。カードの内側の余白はどちらも左右16 pt、上下10 ptです。ロック画面の背景色には `.activityBackgroundTint(.clear)` を指定しています。コンパクト表示ではジャケットと再生状態が見えます。[ロック画面](Documentation/now-playing.png) · [展開したDynamic Island](Documentation/now-playing-island.png)
+冒頭の録画は同梱の再生カードをiPhoneシミュレータのロック画面に表示したものです。ジャケットの隣に曲名とアーティスト名を並べ、その下に再生時間とボタンを置いています。ロック画面では `.activityBackgroundTint(.clear)` を指定し、壁紙が透けて見えるようにしています。展開したDynamic Islandにも同じ曲と操作ボタンが現れます。コンパクト表示ではジャケットと再生状態が見えます。[ロック画面](Documentation/now-playing.png) · [展開したDynamic Island](Documentation/now-playing-island.png)
 
 <details>
 <summary>展開したDynamic Islandの録画を見る</summary>
 
 ![展開したDynamic Islandで曲名とアーティスト名が流れる様子](Documentation/now-playing-island.gif)
 
-[録画をダウンロード（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.6.1/now-playing-island.mp4)
+[スクロールの滑らかさを60 fpsのMP4で確認する](https://github.com/TentoSwift/MarqueeKit/releases/download/1.7.0/now-playing-island.mp4)
 
 </details>
 
-曲名とアーティスト名をそれぞれ `LiveActivityMarquee` に渡します。下の例ではジャケットや右のアイコンを除いた幅を `GeometryReader` で測り、収まる行は静止させます。長い行は平均32 pt/秒で流れ、次の周回が始まるのは両方が先頭に戻ってから2秒後です。
+横送りのフォントは `horizontalFont` で行ごとに指定できます。サンプルの曲名は18 ptのセミボールド、アーティスト名は18 ptのレギュラーです。文字幅は各行に指定したフォントで測り、表示幅に収まる行は静止させます。
+
+1曲目の曲名は「夜明けのホームで — Platform Sessions, Vol. 1」、アーティストは「灯台カルテット feat. 海辺の弦楽団」です。両方の行を平均28 pt/秒で動かすと、短いアーティスト名が先に一周して先頭で待ちます。曲名も先頭に戻ると、2秒後に両方の行が一緒に動き出します。
 
 ```swift
 import MarqueeKit
@@ -45,21 +47,27 @@ import SwiftUI
 
 // NowPlayingCard のジャケットと再生状態のアイコンの間に置く
 GeometryReader { area in
-    let group = WidgetMarqueeGroup(
-        [state.track.title, state.track.artist], startedAt: state.titleStartedAt,
-        pointsPerSecond: 32, timing: .easeInOut, pauseBetweenLoops: 2,
-        viewportWidth: area.size.width
-    )
+    let group = WidgetMarqueeGroup(items: [
+        .init(state.track.title, viewportWidth: area.size.width,
+              horizontalFont: .systemFont(ofSize: 18, weight: .semibold)),
+        .init(state.track.artist, viewportWidth: area.size.width,
+              horizontalFont: .systemFont(ofSize: 18))
+    ], startedAt: state.titleStartedAt, pointsPerSecond: 28,
+       timing: .easeInOut, pauseBetweenLoops: 2)
+
     VStack(alignment: .leading, spacing: 0) {
         ForEach(group.rows) { row in
             LiveActivityMarquee(row)
-                .foregroundStyle(row.id == 0 ? Color.white : Color.white.opacity(0.68))
+                .foregroundStyle(row.id == 0 ? Color.white : Color.white.opacity(0.55))
         }
     }
-    .marqueeEdgeFade(length: 8, clearance: 4)
+    .marqueeEdgeFade(length: 6)
+    .frame(maxHeight: .infinity, alignment: .center)
 }
-.frame(height: 46)
+.frame(height: coverSize)
 ```
+
+単独の行にフォントを指定する場合は `WidgetMarquee` または `LiveActivityMarquee` に `horizontalFont` を渡します。ホーム画面Widgetではプロバイダの `WidgetMarquee.timeline(for:)` に同じ引数を指定してください。
 
 ### 再生カードを試す
 
@@ -85,7 +93,7 @@ iOS 18以降では、アプリがバックグラウンドにあっても長い�
 
 iOS 17で実行するかiOS 17 SDKでビルドした場合は、約1秒ごとに位置を更新します。どちらの方式でも表示領域に収まる文章は静止し、「視差効果を減らす」が有効なときや常時表示で輝度が下がったときも先頭を表示します。VoiceOverは元の文章を1回で読み上げます。
 
-iPhone 17 Proシミュレータ（iOS 27.2）で日本語の文章を横に送ったとき、文字の位置が変わった回数は点灯中のロック画面で毎秒約51回、展開中のDynamic Islandで毎秒約50回でした。下の録画は等速の行を切り出したものです。1.3.0では時計の分が変わる瞬間に文字が逆向きに動く問題を、1.4.3では同期した2行の描画データがサイズ上限を超え、Live Activityが開始直後に終了することがあった問題を修正しました。1.4.3では文字送り用のフォントを小さくし、同じAPIで使えるようにしています。
+iPhone 17 Proシミュレータ（iOS 27.2）で日本語の文章を横に送ったとき、文字の位置が変わった回数は点灯中のロック画面で毎秒約51回、展開中のDynamic Islandで毎秒約50回でした。1.7.0の再生カードをiPhone Duo（iOS 27.3）で22秒間録画したところ、巡航中は曲名とアーティスト名の位置がそれぞれ毎秒約50回変わりました。下の録画はシミュレータで等速の行を切り出したものです。1.3.0では時計の分が変わる瞬間に文字が逆向きに動く問題を、1.4.3では同期した2行の描画データがサイズ上限を超え、Live Activityが開始直後に終了することがあった問題を修正しました。1.4.3では文字送り用のフォントを小さくし、同じAPIで使えるようにしています。
 
 ![ロック画面のLive Activityで日本語の文章が左に流れて一周する様子](Documentation/live-activity-smooth.gif)
 

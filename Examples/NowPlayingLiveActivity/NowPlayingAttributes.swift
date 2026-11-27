@@ -11,7 +11,7 @@ struct NowPlayingAttributes: ActivityAttributes {
     }
 
     static let playlist = [
-        Track(title: "夜明けのホームで — Platform Sessions, Vol. 1", artist: "灯台カルテット feat. 海辺のストリングス・アンサンブル", duration: 251),
+        Track(title: "夜明けのホームで — Platform Sessions, Vol. 1", artist: "灯台カルテット feat. 海辺の弦楽団", duration: 251),
         Track(title: "小雨の窓辺", artist: "灯台カルテット", duration: 204),
         Track(title: "星を待つあいだ — Observatory Mix", artist: "青のアンサンブル", duration: 227)
     ]

@@ -35,10 +35,12 @@ public struct WidgetMarquee: View {
     /// Sets the average travel speed, the timing within each pass, and an optional pause between passes.
     public init(
         _ text: String, pointsPerSecond: CGFloat? = nil,
-        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
     ) {
         let schedule = WidgetMarqueeSchedule(
-            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops, axis: axis
+            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops,
+            axis: axis, horizontalFont: horizontalFont
         )
         self.init(text, schedule: schedule)
     }
@@ -62,10 +64,12 @@ public struct WidgetMarquee: View {
     /// Displays a custom widget entry with the supplied travel speed, timing, and pause.
     public init(
         _ text: String, date: Date, pointsPerSecond: CGFloat? = nil,
-        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
     ) {
         let schedule = WidgetMarqueeSchedule(
-            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops, axis: axis
+            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops,
+            axis: axis, horizontalFont: horizontalFont
         )
         self.init(text, date: date, schedule: schedule)
     }
@@ -89,17 +93,19 @@ public struct WidgetMarquee: View {
     /// WidgetKit controls when each scheduled position appears.
     public nonisolated static func timeline(
         for text: String, from date: Date = .now, pointsPerSecond: CGFloat? = nil,
-        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
     ) -> Timeline<WidgetMarqueeEntry> {
         let schedule = WidgetMarqueeSchedule(
-            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops, axis: axis
+            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops,
+            axis: axis, horizontalFont: horizontalFont
         )
         return timeline(for: text, from: date, schedule: schedule)
     }
 
     public var body: some View {
         let line = WidgetMarqueeMetrics.line(from: text)
-        let textLength = WidgetMarqueeMetrics.contentLength(for: line, axis: axis)
+        let textLength = WidgetMarqueeMetrics.contentLength(for: line, axis: axis, horizontalFont: schedule.horizontalFont)
         let label = messageLabel(for: line)
         let alignment: Alignment = axis == .vertical ? .top : .leading
 
@@ -135,7 +141,7 @@ public struct WidgetMarquee: View {
                 .modifier(MarqueeEdgeMask(axis: axis, edges: edges))
             }
         }
-        .frame(width: axis == .vertical ? WidgetMarqueeMetrics.columnWidth : nil, height: axis == .horizontal ? 22 : nil)
+        .frame(width: axis == .vertical ? WidgetMarqueeMetrics.columnWidth : nil, height: axis == .horizontal ? max(22, ceil(schedule.horizontalFont?.lineHeight ?? 0)) : nil)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: text))
     }
@@ -154,7 +160,7 @@ public struct WidgetMarquee: View {
             .font(Font(WidgetMarqueeMetrics.font))
             .fixedSize()
         } else {
-            Text(verbatim: line).font(Font(WidgetMarqueeMetrics.font)).lineLimit(1)
+            Text(verbatim: line).font(Font(schedule.horizontalFont ?? WidgetMarqueeMetrics.font)).lineLimit(1)
         }
     }
 
@@ -216,23 +222,23 @@ enum WidgetMarqueeMetrics {
     static let columnWidth: CGFloat = 23
     static let verticalAdvance: CGFloat = 20
 
-    static func contentLength(for line: String, axis: MarqueeAxis) -> CGFloat {
-        axis == .vertical ? CGFloat(line.count) * verticalAdvance : textWidth(for: line)
+    static func contentLength(for line: String, axis: MarqueeAxis, horizontalFont: UIFont? = nil) -> CGFloat {
+        axis == .vertical ? CGFloat(line.count) * verticalAdvance : textWidth(for: line, font: horizontalFont)
     }
 
     static func line(from text: String) -> String {
         text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).joined(separator: " ")
     }
 
-    static func textWidth(for line: String) -> CGFloat {
-        ceil((line as NSString).size(withAttributes: [.font: font]).width)
+    static func textWidth(for line: String, font: UIFont? = nil) -> CGFloat {
+        ceil((line as NSString).size(withAttributes: [.font: font ?? Self.font]).width)
     }
 
     static func repeatWidth(for line: String) -> CGFloat {
         textWidth(for: line) + gap
     }
 
-    static func liveRepeatWidth(for line: String) -> CGFloat {
-        ((line + "    ") as NSString).size(withAttributes: [.font: font]).width
+    static func liveRepeatWidth(for line: String, font: UIFont? = nil) -> CGFloat {
+        ((line + "    ") as NSString).size(withAttributes: [.font: font ?? Self.font]).width
     }
 }

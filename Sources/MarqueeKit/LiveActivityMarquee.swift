@@ -24,18 +24,19 @@ public struct LiveActivityMarquee: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var reducedLuminance
 
-    private static let typeface = WidgetMarqueeMetrics.font
-    private static let height: CGFloat = 23
+    private let horizontalFont: UIFont?
+    private var typeface: UIFont { horizontalFont ?? WidgetMarqueeMetrics.font }
+    private var height: CGFloat { axis == .horizontal ? max(23, ceil(typeface.lineHeight)) : 23 }
     private static let gatePhases = 10
 
     private static let stopwatchFont = registerFont("WidgetMarqueeStopwatch")
-    private static let playbackFace = registerFont("WidgetMarqueePlayback", face: "WidgetMarqueePlaybackNibble-Regular")
+    private static let playbackFace = registerFont("WidgetMarqueePlayback", face: "WidgetMarqueePlaybackDirect-Regular")
     private static let speedFace = registerFont("WidgetMarqueeSpeed")
     private static let gateFont = registerFont("WidgetMarqueeTimerGate")
 
     private static func registerFont(_ resourceName: String, face: String? = nil) -> String? {
         let postScriptName = face ?? resourceName + "-Regular"
-        if UIFont(name: postScriptName, size: height) != nil { return postScriptName }
+        if UIFont(name: postScriptName, size: 14) != nil { return postScriptName }
 
         let main = Bundle.main
         var hosts = [main, Bundle(for: LiveActivityMarqueeResources.self)]
@@ -52,7 +53,7 @@ public struct LiveActivityMarquee: View {
             if let url = package?.url(forResource: resourceName, withExtension: "ttf")
                 ?? host.url(forResource: resourceName, withExtension: "ttf") {
                 CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
-                if UIFont(name: postScriptName, size: height) != nil { return postScriptName }
+                if UIFont(name: postScriptName, size: 14) != nil { return postScriptName }
             }
         }
         return nil
@@ -69,12 +70,15 @@ public struct LiveActivityMarquee: View {
     /// A vertical marquee shows one upright grapheme per cell and scrolls upward. Give its viewport a height
     /// with `.frame(height:)`. Omitting the speed gives ten seconds of travel. Nonpositive
     /// or nonfinite speeds stop the marquee. Nonpositive or nonfinite pauses become zero.
+    /// Supply a UIKit font to measure and draw horizontal text at the same size and weight.
     public init(
         _ text: String, startedAt: Date, pointsPerSecond: CGFloat? = nil,
-        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
     ) {
         self.text = text
         self.axis = axis
+        self.horizontalFont = horizontalFont
         self.startedAt = startedAt
         self.pointsPerSecond = pointsPerSecond
         self.timing = timing
@@ -87,6 +91,7 @@ public struct LiveActivityMarquee: View {
     public init(_ row: WidgetMarqueeGroup.Row) {
         self.text = row.text
         self.axis = row.axis
+        self.horizontalFont = row.horizontalFont
         self.startedAt = row.startedAt
         self.pointsPerSecond = row.pointsPerSecond
         self.timing = row.timing
@@ -101,7 +106,7 @@ public struct LiveActivityMarquee: View {
                 stationary(text, length: length)
             } else {
                 let line = WidgetMarqueeMetrics.line(from: text)
-                let contentLength = WidgetMarqueeMetrics.contentLength(for: line, axis: axis)
+                let contentLength = WidgetMarqueeMetrics.contentLength(for: line, axis: axis, horizontalFont: horizontalFont)
                 if length > 0, contentLength > length {
                     let edges = edgeFade.resolved(in: length)
                     Group {
@@ -109,8 +114,10 @@ public struct LiveActivityMarquee: View {
                            redactionReasons.intersection([.placeholder, .privacy]).isEmpty,
                            pointsPerSecond.map({ $0.isFinite && $0 > 0 }) ?? true {
                             moving(line, contentLength: contentLength, length: length, inset: edges.headInset)
+                                .transition(.identity)
                         } else {
                             stationary(line, length: length, inset: edges.headInset)
+                                .transition(.identity)
                         }
                     }
                     .modifier(MarqueeEdgeMask(axis: axis, edges: edges))
@@ -120,8 +127,12 @@ public struct LiveActivityMarquee: View {
             }
         }
         .frame(width: axis == .vertical ? WidgetMarqueeMetrics.columnWidth : nil,
-               height: axis == .horizontal ? Self.height : nil)
+               height: axis == .horizontal ? height : nil)
         .clipped()
+        // WidgetKit otherwise cross-fades the old and new text positions
+        // when the host replaces a stationary or redacted presentation.
+        .contentTransition(.identity)
+        .transition(.identity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: text))
     }
@@ -129,7 +140,7 @@ public struct LiveActivityMarquee: View {
     @ViewBuilder
     private func moving(_ line: String, contentLength: CGFloat, length: CGFloat, inset: CGFloat) -> some View {
         let unit = line + "    "
-        let period = axis == .vertical ? contentLength + WidgetMarqueeMetrics.gap : WidgetMarqueeMetrics.liveRepeatWidth(for: line)
+        let period = axis == .vertical ? contentLength + WidgetMarqueeMetrics.gap : WidgetMarqueeMetrics.liveRepeatWidth(for: line, font: horizontalFont)
         // An inset wider than the loop gap exposes the end of the preceding copy.
         let previous = inset > period - contentLength ? 1 : 0
         if axis == .vertical || sharedCycle != nil || timing != .linear || pauseBetweenLoops > 0 || line.utf8.count > 1_024 {
@@ -145,14 +156,14 @@ public struct LiveActivityMarquee: View {
                         let strip = Self.joined(Array(repeating: tile, count: 2 + previous))
                         clockStrip(systemClock, ruler: ruler, strip: strip, prefixPeriods: 1 + previous,
                                    period: period, width: length, inset: inset)
-                            .frame(width: length, height: Self.height)
+                            .frame(width: length, height: height)
                             .rotationEffect(.degrees(90))
                             .frame(width: WidgetMarqueeMetrics.columnWidth, height: length)
                     } else {
                         stationary(line, length: length, inset: inset)
                     }
                 } else {
-                    let strip = Self.messageStrip(String(repeating: unit, count: 1 + previous) + line)
+                    let strip = messageStrip(String(repeating: unit, count: 1 + previous) + line)
                     clockStrip(systemClock, ruler: ruler, strip: strip, prefixPeriods: 1 + previous,
                                period: period, width: length, inset: inset)
                 }
@@ -167,7 +178,7 @@ public struct LiveActivityMarquee: View {
                 stationary(line, length: length, inset: inset)
             }
         } else {
-            let strip = Self.messageStrip(String(repeating: unit, count: 1 + previous) + line)
+            let strip = messageStrip(String(repeating: unit, count: 1 + previous) + line)
             #if canImport(SwiftUICore)
             if #available(iOS 18.0, *), let face = Self.stopwatchFont {
                 stopwatchStrip(strip, period: period, width: length, face: face, previous: previous, inset: inset)
@@ -180,7 +191,7 @@ public struct LiveActivityMarquee: View {
         }
     }
 
-    private static func messageStrip(_ text: String) -> Text {
+    private func messageStrip(_ text: String) -> Text {
         // WidgetKit can overlap glyphs when it archives a very wide text run.
         // Keep grapheme clusters intact and separate runs with a subpixel
         // baseline difference. VoiceOver uses the original message on the view.
@@ -200,7 +211,7 @@ public struct LiveActivityMarquee: View {
             runs.append(run.baselineOffset(runs.count.isMultiple(of: 2) ? 0 : 1.0 / 1024))
             start = end
         }
-        return joined(runs)
+        return Self.joined(runs)
     }
 
     static func joined(_ segments: [Text]) -> Text {
@@ -220,7 +231,7 @@ public struct LiveActivityMarquee: View {
                 LiveActivityVerticalStrip.stationary(line, viewport: length)
             } else {
                 Text(verbatim: line)
-                    .font(Font(Self.typeface)).lineLimit(1)
+                    .font(Font(typeface)).lineLimit(1)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
         }
@@ -251,7 +262,7 @@ public struct LiveActivityMarquee: View {
         let ruler = Font(Self.speedFont(base, period: period, pointsPerSecond: speed))
         // Each of the seven positional digits contributes less than one full
         // width. Eight copies keep the viewport filled at every combination.
-        let message = Self.messageStrip(String(repeating: unit, count: 8 + previous))
+        let message = messageStrip(String(repeating: unit, count: 8 + previous))
         return clockStrip(systemClock, ruler: ruler, strip: message, prefixPeriods: 7 + previous, period: period, width: width, inset: inset)
     }
 
@@ -286,19 +297,15 @@ public struct LiveActivityMarquee: View {
         let directionMark = Text(verbatim: "\u{200E}").font(ruler)
         return Text("\(directionMark)\(clock.font(ruler))\(strip)")
             .lineLimit(1)
-            .frame(width: CGFloat(2 * prefixPeriods + 1) * period + 2, height: Self.height, alignment: .leading)
+            .frame(width: CGFloat(2 * prefixPeriods + 1) * period + 2, height: height, alignment: .leading)
             .offset(x: -CGFloat(prefixPeriods) * period + inset)
-            .frame(width: width, height: Self.height, alignment: .leading)
+            .frame(width: width, height: height, alignment: .leading)
             .clipped()
             .environment(\.locale, Locale(identifier: "en_US_POSIX"))
             .environment(\.layoutDirection, .leftToRight)
             // Native digit changes already drive motion. A second transition
             // would tween the equivalent copies backward at a minute boundary.
             .contentTransition(.identity)
-            .transaction { transaction in
-                transaction.animation = nil
-                transaction.disablesAnimations = true
-            }
     }
 
     @ViewBuilder
@@ -315,27 +322,27 @@ public struct LiveActivityMarquee: View {
             ForEach(0..<Self.gatePhases, id: \.self) { phase in
                 strip.lineLimit(1).fixedSize()
                     .offset(x: inset - period * (CGFloat(previous) + CGFloat(phase) / CGFloat(Self.gatePhases)))
-                    .frame(width: width, height: Self.height, alignment: .leading)
+                    .frame(width: width, height: height, alignment: .leading)
                     .clipped()
                     .mask { gate(for: phase, width: width, face: face) }
             }
         }
-        .frame(width: width, height: Self.height, alignment: .leading)
+        .frame(width: width, height: height, alignment: .leading)
         .environment(\.layoutDirection, .leftToRight)
     }
 
     private func gate(for phase: Int, width: CGFloat, face: String) -> some View {
         let offset = (Self.gatePhases - phase) % Self.gatePhases
         return Text(startedAt.addingTimeInterval(-Double(offset)), style: .timer)
-            .font(.custom(face, fixedSize: Self.height))
+            .font(.custom(face, fixedSize: height))
             .foregroundStyle(.white)
             .lineLimit(1)
             .multilineTextAlignment(.trailing)
-            .frame(width: Self.height * 12, height: Self.height, alignment: .trailing)
-            .frame(width: Self.height, height: Self.height, alignment: .trailing)
+            .frame(width: height * 12, height: height, alignment: .trailing)
+            .frame(width: height, height: height, alignment: .trailing)
             .clipped()
-            .scaleEffect(x: width / Self.height, y: 1, anchor: .leading)
-            .frame(width: width, height: Self.height, alignment: .leading)
+            .scaleEffect(x: width / height, y: 1, anchor: .leading)
+            .frame(width: width, height: height, alignment: .leading)
             .environment(\.locale, Locale(identifier: "en_US_POSIX"))
     }
 }

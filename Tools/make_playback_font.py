@@ -13,13 +13,11 @@ from make_speed_font import CLOCK_CONTEXTS, CLOCK_PLACES
 
 
 PHASE_COUNT = 4096
-BIT_COUNT = (PHASE_COUNT - 1).bit_length()
 FULL_ADVANCE = 24_000  # 24 em, matching the Swift font size of one repeat width / 24.
 
 DIGITS = [f"d{digit}" for digit in range(10)]
 POSITIONAL_DIGITS = [f"{place}{digit}" for place, _ in CLOCK_PLACES for digit in range(10)]
 ACCUMULATORS = [f"a{phase}" for phase in range(PHASE_COUNT)]
-ADD_BITS = [f"o{bit}" for bit in range(BIT_COUNT)]
 # Low, middle, and high nibbles of each 12-bit clock contribution.
 BANKS = "ABC"
 TOKENS = [
@@ -35,7 +33,7 @@ GROUP_SAMPLES = [
 GROUP_AXES = [f"P{index:03d}" for index in range(len(GROUP_SAMPLES))]
 GLYPH_ORDER = [
     ".notdef", "blank", "colon", "decimal", *DIGITS, *POSITIONAL_DIGITS,
-    *TOKENS, *NIBBLES, *ACCUMULATORS, *ADD_BITS,
+    *TOKENS, *NIBBLES, *ACCUMULATORS,
 ]
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / "Sources/MarqueeKit/Resources/WidgetMarqueePlayback.ttf"
 
@@ -83,28 +81,26 @@ def setup_substitutions(builder):
                 token = f"t{bank}{place}{digit}"
                 rules.append(f"feature {tag} {{ sub {token} from [{alternates}]; }} {tag};")
 
-    # Unselected tokens represent zero. A selected nibble contributes one to
-    # four set bits; each is added to the preceding accumulator modulo 4096.
-    rules.append("feature rlig { lookup bits {")
+    # Each of the three selected nibbles is one operand. Rotate the
+    # accumulator by its value directly, consuming up to three per digit.
+    rules.append("feature rlig { lookup clear {")
     for token in TOKENS:
         rules.append(f"sub {token} by NULL;")
-    for bank in range(len(BANKS)):
-        for value in range(1, 16):
-            bits = [f"o{4 * bank + bit}" for bit in range(4) if value & (1 << bit)]
-            rules.append(f"sub n{bank}_{value} by {' '.join(bits)};")
-    rules.append("} bits; } rlig;")
-
+    rules.append("} clear; } rlig;")
     rules.append("lookup erase {")
-    for operand in ADD_BITS:
+    for operand in NIBBLES:
         rules.append(f"sub {operand} by NULL;")
     rules.append("} erase;")
-    for bit in range(BIT_COUNT):
-        rules.append(f"lookup rot{bit} {{ sub a0 by a{1 << bit}; }} rot{bit};")
+    for bank in range(len(BANKS)):
+        for value in range(1, 16):
+            shift = value << (4 * bank)
+            rules.append(f"lookup rot{bank}_{value} {{ sub a0 by a{shift}; }} rot{bank}_{value};")
     rules.append("lookup consume {")
-    for bit in range(BIT_COUNT):
-        rules.append(f"sub @acc' lookup rot{bit} o{bit}' lookup erase;")
+    for bank in range(len(BANKS)):
+        for value in range(1, 16):
+            rules.append(f"sub @acc' lookup rot{bank}_{value} n{bank}_{value}' lookup erase;")
     rules.append("} consume;")
-    repeated = " ".join(["lookup consume"] * (BIT_COUNT * len(CLOCK_PLACES)))
+    repeated = " ".join(["lookup consume"] * (len(BANKS) * len(CLOCK_PLACES)))
     rules.append(f"feature rlig {{ sub @acc' {repeated}; }} rlig;")
 
     # A solo pass can rotate its stop onto an exact interpolation sample.
@@ -161,8 +157,8 @@ def build_font(output=DEFAULT_PATH):
     builder.setupHorizontalHeader(ascent=2, descent=-1, lineGap=0)
     builder.setupOS2(sTypoAscender=2, sTypoDescender=-1, usWinAscent=2, usWinDescent=1)
     builder.setupNameTable({
-        "familyName": "Widget Marquee Playback Nibble", "styleName": "Regular",
-        "psName": "WidgetMarqueePlaybackNibble-Regular",
+        "familyName": "Widget Marquee Playback Direct", "styleName": "Regular",
+        "psName": "WidgetMarqueePlaybackDirect-Regular",
     })
     builder.setupPost(keepGlyphNames=False)
     setup_substitutions(builder)

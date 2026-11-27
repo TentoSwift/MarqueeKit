@@ -1,4 +1,4 @@
-import Foundation
+import UIKit
 import WidgetKit
 
 /// The text and scroll position to display at a particular point in a widget's timeline.
@@ -30,10 +30,12 @@ public struct WidgetMarqueeEntry: TimelineEntry, Sendable {
     /// Creates an entry with the supplied travel speed, timing, and loop pause.
     public init(
         _ text: String, date: Date = .now, pointsPerSecond: CGFloat? = nil,
-        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
+        axis: MarqueeAxis = .horizontal, horizontalFont: UIFont? = nil
     ) {
         let schedule = WidgetMarqueeSchedule(
-            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops, axis: axis
+            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops,
+            axis: axis, horizontalFont: horizontalFont
         )
         self.init(text, date: date, schedule: schedule)
     }

@@ -1,4 +1,4 @@
-import Foundation
+import UIKit
 
 /// Coordinates the start of each pass across two or more marquee rows.
 ///
@@ -12,6 +12,8 @@ public struct WidgetMarqueeGroup: Sendable {
         public let text: String
         public let pointsPerSecond: CGFloat?
         public let timing: WidgetMarqueeTiming?
+        /// Font used for both the horizontal line and its travel distance.
+        public let horizontalFont: UIFont?
         /// The available width for horizontal scrolling or height for vertical scrolling.
         public let viewportLength: CGFloat?
         public var viewportWidth: CGFloat? { viewportLength }
@@ -19,17 +21,18 @@ public struct WidgetMarqueeGroup: Sendable {
         /// Supply the available text width when rows have different widths or speeds.
         /// A message that fits in this width does not extend the group's cycle.
         public init(_ text: String, pointsPerSecond: CGFloat? = nil, timing: WidgetMarqueeTiming? = nil,
-                    viewportWidth: CGFloat? = nil) {
-            self.init(text, pointsPerSecond: pointsPerSecond, timing: timing, viewportLength: viewportWidth)
+                    viewportWidth: CGFloat? = nil, horizontalFont: UIFont? = nil) {
+            self.init(text, pointsPerSecond: pointsPerSecond, timing: timing, viewportLength: viewportWidth, horizontalFont: horizontalFont)
         }
 
         /// Exclude messages that fit along the group's scrolling axis.
         public init(_ text: String, pointsPerSecond: CGFloat? = nil, timing: WidgetMarqueeTiming? = nil,
-                    viewportLength: CGFloat?) {
+                    viewportLength: CGFloat?, horizontalFont: UIFont? = nil) {
             self.text = text
             self.pointsPerSecond = pointsPerSecond
             self.timing = timing
             self.viewportLength = viewportLength
+            self.horizontalFont = horizontalFont
         }
     }
 
@@ -38,6 +41,7 @@ public struct WidgetMarqueeGroup: Sendable {
         /// The index in the supplied array. Duplicate messages remain separate rows.
         public let id: Int
         public let axis: MarqueeAxis
+        public let horizontalFont: UIFont?
         public let text: String
         public let pointsPerSecond: CGFloat
         public let timing: WidgetMarqueeTiming
@@ -104,17 +108,19 @@ public struct WidgetMarqueeGroup: Sendable {
     /// Creates synchronized rows with the same speed and timing.
     public init(_ texts: [String], startedAt: Date, pointsPerSecond: CGFloat,
                 timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
-                viewportWidth: CGFloat? = nil) {
+                viewportWidth: CGFloat? = nil, horizontalFont: UIFont? = nil) {
         self.init(texts, startedAt: startedAt, pointsPerSecond: pointsPerSecond, timing: timing,
-                  pauseBetweenLoops: pauseBetweenLoops, axis: .horizontal, viewportLength: viewportWidth)
+                  pauseBetweenLoops: pauseBetweenLoops, axis: .horizontal, viewportLength: viewportWidth,
+                  horizontalFont: horizontalFont)
     }
 
     /// Creates synchronized rows or upright columns. Supply their available width or height
     /// so a message that fits does not hold up the other members.
     public init(_ texts: [String], startedAt: Date, pointsPerSecond: CGFloat,
                 timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
-                axis: MarqueeAxis, viewportLength: CGFloat? = nil) {
-        self.init(items: texts.map { Item($0, viewportLength: viewportLength) }, startedAt: startedAt,
+                axis: MarqueeAxis, viewportLength: CGFloat? = nil, horizontalFont: UIFont? = nil) {
+        self.init(items: texts.map { Item($0, viewportLength: viewportLength, horizontalFont: horizontalFont) },
+                  startedAt: startedAt,
                   pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops, axis: axis)
     }
 
@@ -133,7 +139,7 @@ public struct WidgetMarqueeGroup: Sendable {
         let liveCycle = Self.cycle(longest: liveDurations.max() ?? 0, pause: pause)
         self.rows = items.indices.map { index in
             let item = items[index]
-            return Row(id: index, axis: axis, text: item.text, pointsPerSecond: item.pointsPerSecond ?? pointsPerSecond,
+            return Row(id: index, axis: axis, horizontalFont: item.horizontalFont, text: item.text, pointsPerSecond: item.pointsPerSecond ?? pointsPerSecond,
                        timing: timings[index], startedAt: startedAt,
                        widgetTravelDuration: travel[index].widget, widgetCycleDuration: widgetCycle,
                        widgetMotion: timings[index] == .easeInOut ? widgetMotions[travel[index].widget] : nil,
@@ -147,7 +153,7 @@ public struct WidgetMarqueeGroup: Sendable {
         guard speed > 0, speed.isFinite else { return (0, 0) }
         let line = WidgetMarqueeMetrics.line(from: item.text)
         guard line.contains(where: { !$0.isWhitespace }) else { return (0, 0) }
-        let textLength = WidgetMarqueeMetrics.contentLength(for: line, axis: axis)
+        let textLength = WidgetMarqueeMetrics.contentLength(for: line, axis: axis, horizontalFont: item.horizontalFont)
         if let viewport = item.viewportLength {
             guard viewport > 0, textLength > viewport else { return (0, 0) }
         }
@@ -156,7 +162,7 @@ public struct WidgetMarqueeGroup: Sendable {
         let widget = Double(period / speed)
         let liveFits = item.text.utf8.count <= 4096 && (axis != .vertical || LiveActivityVerticalStrip.supportsAnimation(line))
         // The horizontal Live Activity strip uses four measured spaces between copies.
-        let livePeriod = axis == .vertical ? period : WidgetMarqueeMetrics.liveRepeatWidth(for: line)
+        let livePeriod = axis == .vertical ? period : WidgetMarqueeMetrics.liveRepeatWidth(for: line, font: item.horizontalFont)
         let live = liveFits ? Double(livePeriod / speed) : 0
         return (widget.isFinite ? widget : 0, live.isFinite ? live : 0)
     }

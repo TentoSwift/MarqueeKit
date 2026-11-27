@@ -35,85 +35,142 @@ private struct NowPlayingCard: View {
     let activityID: String
     var isExpanded = false
 
-    private var coverSize: CGFloat { isExpanded ? 44 : 48 }
-    private var controlHeight: CGFloat { isExpanded ? 32 : 44 }
+    private var coverSize: CGFloat { isExpanded ? 48 : 57 }
+    private var controlHeight: CGFloat { isExpanded ? 34 : 44 }
+    private var secondaryColor: Color { .white.opacity(0.55) }
 
     var body: some View {
-        VStack(spacing: isExpanded ? 2 : 5) {
-            HStack(spacing: 10) {
+        VStack(spacing: isExpanded ? 1 : 7) {
+            HStack(spacing: 4) {
                 RecordCover().frame(width: coverSize, height: coverSize)
                 GeometryReader { area in
-                    let group = WidgetMarqueeGroup(
-                        [state.track.title, state.track.artist], startedAt: state.titleStartedAt,
-                        pointsPerSecond: 32, timing: .easeInOut, pauseBetweenLoops: 2,
-                        viewportWidth: area.size.width
-                    )
+                    let group = WidgetMarqueeGroup(items: [
+                        .init(state.track.title, viewportWidth: area.size.width,
+                              horizontalFont: .systemFont(ofSize: 18, weight: .semibold)),
+                        .init(state.track.artist, viewportWidth: area.size.width,
+                              horizontalFont: .systemFont(ofSize: 18))
+                    ], startedAt: state.titleStartedAt, pointsPerSecond: 28,
+                       timing: .easeInOut, pauseBetweenLoops: 2)
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(group.rows) { row in
                             LiveActivityMarquee(row)
-                                .foregroundStyle(row.id == 0 ? Color.white : Color.white.opacity(0.68))
+                                .foregroundStyle(row.id == 0 ? .white : secondaryColor)
                         }
                     }
-                    .marqueeEdgeFade(length: 8, clearance: 4)
+                    .marqueeEdgeFade(length: 6)
+                    .frame(maxHeight: .infinity, alignment: .center)
                 }
-                .frame(height: 46)
-                Group {
-                    if state.playingFrom == nil {
-                        Image(systemName: "pause.fill").font(.caption)
-                    } else {
-                        Image(systemName: "waveform")
-                            .foregroundStyle(LinearGradient(colors: [.orange, .pink, .yellow],
-                                                            startPoint: .leading, endPoint: .trailing))
-                    }
-                }
-                .frame(width: 20, alignment: .trailing)
-                .accessibilityHidden(true)
+                .frame(height: coverSize)
+                playbackIndicator
+                    .frame(width: 30)
+                    .offset(y: isExpanded ? 0 : -10)
+                    .padding(.trailing, 6)
+                    .accessibilityHidden(true)
             }
             progress
-            HStack(spacing: 0) {
-                control(.favorite, state.favorites.contains(state.trackIndex) ? "star.fill" : "star",
-                        "お気に入りを切り替える", size: 17, alignment: isExpanded ? .center : .leading)
-                Spacer(minLength: 0)
-                control(.previous, "backward.fill", "前の曲")
-                Spacer(minLength: 0)
-                control(.playPause, state.playingFrom == nil ? "play.fill" : "pause.fill",
-                        state.playingFrom == nil ? "再生" : "一時停止", size: 26)
-                Spacer(minLength: 0)
-                control(.next, "forward.fill", "次の曲")
-                Spacer(minLength: 0)
-                Image(systemName: "airpodspro")
-                    .font(.body).foregroundStyle(.white.opacity(0.65))
-                    .frame(width: 44, height: controlHeight, alignment: isExpanded ? .center : .trailing)
-                    .accessibilityLabel("デモの出力先：イヤフォン")
-            }
+            controls
+                .offset(y: isExpanded ? -5 : 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        // The expanded bottom region begins below the system camera area.
+        .padding(.top, isExpanded ? 1 : 14)
+        .padding(.bottom, isExpanded ? 11 : 14)
         .foregroundStyle(.white)
     }
 
-    private var progress: some View {
-        HStack(spacing: 7) {
-            if let start = state.playingFrom {
-                let interval = start...start.addingTimeInterval(state.track.duration)
-                Text(timerInterval: interval, countsDown: false).frame(width: 42, alignment: .leading)
-                ProgressView(timerInterval: interval, countsDown: false).labelsHidden()
-                HStack(spacing: 0) {
-                    Text("−")
-                    Text(timerInterval: interval, countsDown: true)
+    @ViewBuilder
+    private var playbackIndicator: some View {
+        if isExpanded && state.playingFrom != nil {
+            let heights: [CGFloat] = [21, 14, 19, 21, 22, 17]
+            LinearGradient(colors: [Color(red: 0.69, green: 0.46, blue: 0.46),
+                                    Color(red: 0.72, green: 0.70, blue: 0.63)],
+                           startPoint: .leading, endPoint: .trailing)
+                .frame(width: 22, height: 22)
+                .mask {
+                    HStack(spacing: 1.5) {
+                        ForEach(heights.indices, id: \.self) { index in
+                            Capsule().frame(width: 2.4, height: heights[index])
+                        }
+                    }
                 }
-                .frame(width: 42, alignment: .trailing)
-            } else {
-                Text(clock(state.pausedAt)).frame(width: 42, alignment: .leading)
-                ProgressView(value: state.pausedAt, total: state.track.duration)
-                Text("−" + clock(state.track.duration - state.pausedAt))
-                    .frame(width: 42, alignment: .trailing)
+        } else {
+            HStack(spacing: 1.8) {
+                ForEach(0..<6) { _ in Circle().frame(width: 1.8, height: 1.8) }
             }
+            .foregroundStyle(.white.opacity(0.32))
         }
-        .font(.caption.monospacedDigit())
-        .foregroundStyle(.white.opacity(0.72))
-        .progressViewStyle(.linear)
-        .tint(.white.opacity(0.85))
+    }
+
+    private var progress: some View {
+        let interval = state.playingFrom.map { $0...$0.addingTimeInterval(state.track.duration) }
+        return HStack(spacing: 8) {
+            timeLabel(interval: interval, remaining: false)
+            Group {
+                if let interval {
+                    ProgressView(timerInterval: interval, countsDown: false)
+                } else {
+                    ProgressView(value: state.pausedAt, total: state.track.duration)
+                }
+            }
+            .labelsHidden()
+            .progressViewStyle(.linear)
+            .tint(.white.opacity(0.55))
+            // Slice the middle of the system timer bar for a flat moving edge.
+            // The outer capsule rounds only the ends of the entire track.
+            .frame(height: 6)
+            .scaleEffect(x: 1, y: 8)
+            .frame(height: isExpanded ? 5 : 7)
+            .clipShape(Capsule())
+            .accessibilityHidden(true)
+            timeLabel(interval: interval, remaining: true)
+        }
+        .font(.system(size: isExpanded ? 15 : 20, weight: .medium).monospacedDigit())
+        .foregroundStyle(secondaryColor)
+        .padding(.horizontal, 6)
+    }
+
+    private func timeLabel(interval: ClosedRange<Date>?, remaining: Bool) -> some View {
+        let pausedTime = remaining ? state.track.duration - state.pausedAt : state.pausedAt
+        return HStack(alignment: .firstTextBaseline, spacing: 0) {
+            if remaining { Text(verbatim: "−") }
+            // Reserve the width of m:ss in the actual font, independent of the timer's ideal width.
+            Text(verbatim: clock(state.track.duration))
+                .hidden()
+                .overlay(alignment: .trailing) {
+                    if let interval {
+                        Text(timerInterval: interval, countsDown: remaining, showsHours: false)
+                            .multilineTextAlignment(.trailing)
+                            .minimumScaleFactor(0.9)
+                    } else {
+                        Text(verbatim: clock(pausedTime))
+                    }
+                }
+        }
+        .lineLimit(1)
+        .fixedSize()
+        .accessibilityElement(children: .combine)
+    }
+
+    private var controls: some View {
+        let favorite = state.favorites.contains(state.trackIndex)
+        return HStack(spacing: 0) {
+            control(.favorite, favorite ? "star.fill" : "star",
+                    "お気に入りを切り替える", size: isExpanded ? 20 : 23, weight: .regular)
+                .foregroundStyle(favorite ? .white : secondaryColor)
+            Spacer(minLength: 0)
+            control(.previous, "backward.fill", "前の曲", size: isExpanded ? 22 : 25)
+            Spacer(minLength: 0)
+            control(.playPause, state.playingFrom == nil ? "play.fill" : "pause.fill",
+                    state.playingFrom == nil ? "再生" : "一時停止", size: isExpanded ? 32 : 39)
+            Spacer(minLength: 0)
+            control(.next, "forward.fill", "次の曲", size: isExpanded ? 22 : 25)
+            Spacer(minLength: 0)
+            Image(systemName: "airpodspro")
+                .font(.system(size: isExpanded ? 18 : 25, weight: .regular))
+                .foregroundStyle(secondaryColor)
+                .frame(width: 44, height: controlHeight)
+                .accessibilityLabel("デモの出力先：イヤフォン")
+        }
     }
 
     private func clock(_ time: TimeInterval) -> String {
@@ -122,10 +179,10 @@ private struct NowPlayingCard: View {
     }
 
     private func control(_ action: PlayerAction, _ symbol: String, _ label: String,
-                         size: CGFloat = 20, alignment: Alignment = .center) -> some View {
+                         size: CGFloat, weight: Font.Weight = .semibold) -> some View {
         Button(intent: NowPlayingControl(action, activityID: activityID)) {
-            Image(systemName: symbol).font(.system(size: size, weight: .semibold))
-                .frame(width: 44, height: controlHeight, alignment: alignment)
+            Image(systemName: symbol).font(.system(size: size, weight: weight))
+                .frame(width: 44, height: controlHeight)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
