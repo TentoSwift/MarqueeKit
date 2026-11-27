@@ -6,12 +6,12 @@ iOSアプリ、ホーム画面Widget、Live Activityで、1行に収まらない
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.4.2` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.4.3` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
 
 `Package.swift` から追加する場合は、`dependencies` に次の行を指定します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.4.2")
+.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.4.3")
 ```
 
 ## SwiftUIアプリで使う
@@ -122,6 +122,8 @@ WidgetMarquee(entry)
 ## Live Activityで使う
 
 ロック画面と展開中のDynamic Islandでは `LiveActivityMarquee` に文章と開始日時を渡します。開始日時はアクティビティの属性に保持します。
+
+1.4.3では、文字送りに使うフォントを小さくしました。同期した2行を表示すると、Dynamic Island用の描画データがサイズ上限を超え、開始直後にLive Activityが終了することがあったためです。APIと呼び出し方はこれまでと同じです。
 
 ```swift
 import WidgetMarquee

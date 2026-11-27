@@ -10,14 +10,14 @@ enum WidgetMarqueePlayback {
     private static let phaseCount = 4096
     // Matches the phase samples in make_playback_font.py. Closely spaced samples
     // near zero also resolve short travel followed by a much longer group pause.
-    private static let groupSamples: [(axis: UInt32, phase: Double)] = {
-        var phases = Array(0..<16)
-        for (end, step) in [(32, 2), (64, 4), (128, 8), (256, 16), (phaseCount + 1, 32)] {
+    private static let groupSamples: [(axis: UInt32, tick: Int)] = {
+        var phases = Array(0..<32)
+        for (end, step) in [(64, 4), (128, 8), (256, 16), (phaseCount + 1, 32)] {
             phases.append(contentsOf: stride(from: 8 * step, to: end, by: step))
         }
         return phases.enumerated().map { index, phase in
             let axis = String(format: "P%03d", index).utf8.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
-            return (axis, Double(phase) / Double(phaseCount))
+            return (axis, phase)
         }
     }()
 
@@ -33,30 +33,48 @@ enum WidgetMarqueePlayback {
             for digit in 1...maximum {
                 let offset = (seconds * Double(digit)).truncatingRemainder(dividingBy: cycle)
                 let phase = Int((offset / cycle * Double(phaseCount)).rounded()) % phaseCount
-                features.append([
-                    kCTFontOpenTypeFeatureTag: "W" + place + String(digit),
-                    kCTFontOpenTypeFeatureValue: phase + 1
-                ])
+                for (bit, bank) in ["A", "B", "C"].enumerated() {
+                    let nibble = (phase >> (bit * 4)) & 15
+                    if nibble > 0 {
+                        features.append([
+                            kCTFontOpenTypeFeatureTag: bank + place + String(digit),
+                            kCTFontOpenTypeFeatureValue: nibble
+                        ])
+                    }
+                }
             }
         }
-        let axes: [UInt32: Double]
-        if let groupMotion {
-            features.append([kCTFontOpenTypeFeatureTag: "GRUP", kCTFontOpenTypeFeatureValue: 1])
-            // Sample on the actual clock grid. Moving a sample to a sibling's
-            // finishing time would change this row's speed during its cruise.
-            axes = Dictionary(uniqueKeysWithValues: groupSamples.compactMap { sample in
-                let remaining = 1 - groupMotion.progress(at: sample.phase * cycle)
-                return remaining > 0 ? (sample.axis, remaining) : nil
-            })
-        } else {
-            features.append([kCTFontOpenTypeFeatureTag: "EASE",
-                             kCTFontOpenTypeFeatureValue: timing == .easeInOut ? 1 : 0])
-            // DUTY maps the moving portion to a full pass and the rest to the head.
-            let movingFraction = cycle.isFinite
-                ? travelDuration / cycle
-                : (travelDuration / 2) / (travelDuration / 2 + pause / 2)
-            axes = [0x44555459: movingFraction]
+        // The font interpolates these distances on the actual clock grid.
+        // Keep the arithmetic in fractions, including for exceptionally long pauses.
+        let movingFraction = cycle.isFinite
+            ? travelDuration / cycle
+            : (travelDuration / 2) / (travelDuration / 2 + pause / 2)
+        // Align a standalone stop to a knot so a linear pass never leaks
+        // into the hold. The first 32 ticks are all knots, preserving the
+        // native-clock precision of the restart after rotating the phase.
+        let stop = min(phaseCount, max(1, Int((movingFraction * Double(phaseCount)).rounded())))
+        let shift = groupMotion == nil
+            ? ((groupSamples.first { $0.tick >= stop }?.tick ?? stop) - stop)
+            : 0
+        for bit in 0..<5 where shift & (1 << bit) != 0 {
+            features.append([kCTFontOpenTypeFeatureTag: "SHF" + String(bit), kCTFontOpenTypeFeatureValue: 1])
         }
+        let axes = Dictionary(uniqueKeysWithValues: groupSamples.compactMap { sample -> (UInt32, Double)? in
+            let relative = sample.tick - shift
+            let tick = relative < 0 ? relative + phaseCount : relative
+            let phase = Double(tick) / Double(phaseCount)
+            let progress: Double
+            if let groupMotion {
+                progress = groupMotion.progress(at: phase * cycle)
+            } else if tick == 0 {
+                progress = 0
+            } else if tick >= stop {
+                progress = 1
+            } else {
+                progress = timing.progress(min(1, phase / movingFraction))
+            }
+            return progress < 1 ? (sample.axis, 1 - progress) : nil
+        })
         let attributes: [CFString: Any] = [
             kCTFontFeatureSettingsAttribute: features,
             kCTFontVariationAttribute: axes

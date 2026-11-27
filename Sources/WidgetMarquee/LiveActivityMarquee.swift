@@ -18,6 +18,7 @@ public struct LiveActivityMarquee: View {
     private let pauseBetweenLoops: TimeInterval
     private let sharedCycle: (travel: TimeInterval, duration: TimeInterval, motion: WidgetMarqueeGroup.Motion?)?
 
+    @Environment(\.redactionReasons) private var redactionReasons
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var reducedLuminance
 
@@ -26,12 +27,12 @@ public struct LiveActivityMarquee: View {
     private static let gatePhases = 10
 
     private static let stopwatchFont = registerFont("WidgetMarqueeStopwatch")
-    private static let playbackFace = registerFont("WidgetMarqueePlayback")
+    private static let playbackFace = registerFont("WidgetMarqueePlayback", face: "WidgetMarqueePlaybackNibble-Regular")
     private static let speedFace = registerFont("WidgetMarqueeSpeed")
     private static let gateFont = registerFont("WidgetMarqueeTimerGate")
 
-    private static func registerFont(_ resourceName: String) -> String? {
-        let postScriptName = resourceName + "-Regular"
+    private static func registerFont(_ resourceName: String, face: String? = nil) -> String? {
+        let postScriptName = face ?? resourceName + "-Regular"
         if UIFont(name: postScriptName, size: height) != nil { return postScriptName }
 
         let main = Bundle.main
@@ -99,7 +100,9 @@ public struct LiveActivityMarquee: View {
                 let lineWidth = WidgetMarqueeMetrics.textWidth(for: line)
                 let width = viewport.size.width
 
+                // A redacted snapshot only needs the stationary text layout.
                 if width > 0, lineWidth > width, !reduceMotion, !reducedLuminance,
+                   redactionReasons.intersection([.placeholder, .privacy]).isEmpty,
                    pointsPerSecond.map({ $0.isFinite && $0 > 0 }) ?? true {
                     let unit = line + "    "
                     let period = WidgetMarqueeMetrics.liveRepeatWidth(for: line)

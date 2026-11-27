@@ -21,6 +21,32 @@ final class LiveActivitySpeedTests: XCTestCase {
         return CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(string), nil, nil, nil))
     }
 
+    func testPlaybackResourceStaysCompactForLiveActivityArchives() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "WidgetMarqueePlayback", withExtension: "ttf"))
+        let size = try XCTUnwrap(url.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+        // The system archives this font with the activity views. A 3.2 MiB
+        // font produced a rejected archive on device. Leave room for other views.
+        XCTAssertLessThan(size, 256 * 1024)
+    }
+
+    func testStandaloneStopBetweenCurveSamplesHoldsUntilTheNextLap() throws {
+        let base = try bundledFont("WidgetMarqueePlayback")
+        let width: CGFloat = 212.5
+        // 4.25 s falls halfway through a curve sample interval in this 128 s
+        // cycle. The clock itself still resolves the stop to 1/4096 of a lap.
+        for timing in [WidgetMarqueeTiming.linear, .easeInOut] {
+            let font = WidgetMarqueePlayback.font(base, period: width, travelDuration: 4.25,
+                                                  pause: 123.75, timing: timing)
+            for stamp in ["0:04.26", "0:04.30", "1:00.00", "2:07.90"] {
+                XCTAssertEqual(advance(stamp, font: font), 0, accuracy: 0.001, stamp)
+            }
+            let expected = width * (1 - timing.progress(0.5 / 4.25))
+            for stamp in ["0:00.50", "2:08.50"] {
+                XCTAssertEqual(advance(stamp, font: font), expected, accuracy: 2.5, stamp)
+            }
+        }
+    }
+
     // A carry may put a different copy of the same text in the viewport.
     private func assertDistance(_ distance: CGFloat, equals expected: CGFloat, period: CGFloat, stamp: String,
                                 file: StaticString = #filePath, line: UInt = #line) {
