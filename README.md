@@ -6,12 +6,12 @@ iOSアプリ、ホーム画面Widget、Live Activityで、1行に収まらない
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.2.0` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.3.0` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
 
 `Package.swift` から追加する場合は、`dependencies` に次の行を指定します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.2.0")
+.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.3.0")
 ```
 
 ## SwiftUIアプリで使う
@@ -30,6 +30,26 @@ struct MessageView: View {
     }
 }
 ```
+
+## スクロールの速度、加減速、周回の待ち時間
+
+`pointsPerSecond` は移動中の平均速度で、単位は画面上のポイント毎秒です。`.easeInOut` は各周の始めと終わりでゆっくり動き、中央で最も速くなります。一周して文章の先頭に戻ると、`pauseBetweenLoops` に指定した秒数だけその位置で待ちます。
+
+```swift
+// SwiftUIアプリ
+WidgetMarquee(text, pointsPerSecond: 40, timing: .easeInOut, pauseBetweenLoops: 2)
+
+// ホーム画面Widgetのプロバイダ
+WidgetMarquee.timeline(for: text, pointsPerSecond: 40, timing: .easeInOut, pauseBetweenLoops: 2)
+
+// Live Activity
+LiveActivityMarquee(text, startedAt: startedAt, pointsPerSecond: 40,
+                    timing: .easeInOut, pauseBetweenLoops: 2)
+```
+
+iOS 27.2シミュレータのLive Activityでは、同じ文章に30、60 pt/秒を指定して、約30、60 pt/秒で移動したことを確認しました。90 pt/秒・2秒待機の設定では、等速の行は約5.7秒で移動し、約2秒静止しました。緩急を付けた行は同じ周期で、中央で約135 pt/秒まで加速しました。[加減速と2秒待機の録画（MP4）](https://github.com/TentoSwift/WidgetMarquee/releases/download/1.3.0/live-activity-ease-and-pause.mp4)
+
+各引数は個別に省略できます。既定は等速（`.linear`）で、周回の待ち時間は0秒です。速度を省略するとLive Activityは10秒で一周し、SwiftUIアプリとホーム画面Widgetは文章の長さに応じた従来の周期を使います。たとえばLive Activityに `pauseBetweenLoops: 2` だけを渡すと、10秒かけて移動して2秒待ちます。速度0、負の速度、非有限の速度では文章が静止します。負の待ち時間や非有限の待ち時間は0秒として扱います。
 
 ## ホーム画面Widgetで使う
 
@@ -72,15 +92,15 @@ import WidgetMarquee
 LiveActivityMarquee(context.state.text, startedAt: context.attributes.startedAt)
 ```
 
-iOS 18以降では、アプリがバックグラウンドにあっても、長い文章が約10秒で一周します。OSが描画するストップウォッチと本文を1行に並べ、経過時間に応じて先頭の透明な文字の幅を縮める仕組みです。フォントはパッケージに同梱しており、文字送りのためのタイマー、プッシュ通知、`Activity.update` は不要です。[SwiftUIのストップウォッチ](https://developer.apple.com/documentation/swiftui/systemformatstyle/stopwatch)
+iOS 18以降では、アプリがバックグラウンドにあっても長い文章が自動で流れます。速度指定を省略した場合の移動時間は約10秒です。OSが描画するストップウォッチと本文を1行に並べ、経過時間に応じて先頭の透明な文字の幅を縮める仕組みです。フォントはパッケージに同梱しており、文字送りのためのタイマー、プッシュ通知、`Activity.update` は不要です。[SwiftUIのストップウォッチ](https://developer.apple.com/documentation/swiftui/systemformatstyle/stopwatch)
 
-iOS 17、またはiOS 17 SDKでビルドした場合は、約1秒ごとに10段階で一周します。どちらも1行に収まる文章は静止し、「視差効果を減らす」が有効なときや、常時表示で輝度が下がったときも静止表示に切り替わります。VoiceOverは元の文章を1回で読み上げます。
+iOS 17、またはiOS 17 SDKでビルドした場合は、約1秒ごとに位置を更新します。どちらも1行に収まる文章は静止し、「視差効果を減らす」が有効なときや、常時表示で輝度が下がったときも静止表示に切り替わります。VoiceOverは元の文章を1回で読み上げます。
 
-iPhone 17 Proシミュレータ（iOS 27.2）で日本語の文章を表示し、点灯中のロック画面で毎秒約51回、展開中のDynamic Islandで毎秒約50回、本文の位置が変わることを確認しました。録画には「自動」行を切り出しています。撮影中、検証用アプリの更新番号は0のままでした。
+iPhone 17 Proシミュレータ（iOS 27.2）で日本語の文章を表示し、点灯中のロック画面で毎秒約51回、展開中のDynamic Islandで毎秒約50回、本文の位置が変わることを確認しました。下の録画は、等速で自動スクロールする行を切り出したものです。1.3.0では時計の分表示が変わる瞬間に起きていた逆向きの動きを修正しました。
 
 ![ロック画面のLive Activityで「自動」行の日本語が左へ流れて一周する様子](Documentation/live-activity-smooth.gif)
 
-AppleのFrameworks Engineerは、タイマーとカスタムフォントを使うアニメーションをサポート対象外としており、電池や性能への影響を指摘しています。実際の更新頻度はOSや表示状態に左右されます。[Appleの技術者による説明](https://developer.apple.com/forums/thread/757696)
+AppleのFrameworks Engineerは、タイマーとカスタムフォントを使うアニメーションをサポート対象外としており、電池や性能への影響を指摘しています。実際の更新頻度はOSや表示状態に左右されます。Live Activityで加減速や待機を指定すると一周を4,096段階で表すため、文章や待ち時間が非常に長いと、文字送りの刻みが目立つことがあります。[Appleの技術者による説明](https://developer.apple.com/forums/thread/757696)
 
 ### サンプルを実行する
 
@@ -98,13 +118,13 @@ func startMarquee(_ message: String) throws -> Activity<MarqueeActivityAttribute
     let attributes = MarqueeActivityAttributes(startedAt: .now)
     return try Activity.request(
         attributes: attributes,
-        content: try attributes.content(for: message),
+        content: try attributes.content(for: message, pointsPerSecond: 40),
         pushType: nil
     )
 }
 ```
 
-別の文章に差し替えるときは `await activity.update(try activity.attributes.content(for: newText))`、終了時は `await activity.end(nil, dismissalPolicy: .immediate)` を使います。サンプルは送信前に、属性と状態の合計がActivityKitの4 KB制限に収まるか確認します。自動ループが続くのはLive Activityの動作中で、1回のアクティビティは最長8時間です。[AppleのLive Activity仕様](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities)
+別の文章や速度に差し替えるときは `await activity.update(try activity.attributes.content(for: newText, pointsPerSecond: 60))`、終了時は `await activity.end(nil, dismissalPolicy: .immediate)` を使います。サンプルは送信前に、属性と状態の合計がActivityKitの4 KB制限に収まるか確認します。自動ループが続くのはLive Activityの動作中で、1回のアクティビティは最長8時間です。[AppleのLive Activity仕様](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities)
 
 ActivityKitのデータ更新に合わせて1段だけ送る場合は、状態に表示位置の日時を持たせ、`WidgetMarquee(text, date: positionDate)` に渡せます。iPhone Duo（iOS 27.3）では、経過タイマーだけが8秒進んだ間は文字位置が同じで、更新を1件送ると位置が変わりました。[シミュレータでの比較画像](Documentation/live-activity.png)
 
@@ -112,7 +132,7 @@ ActivityKitのデータ更新に合わせて1段だけ送る場合は、状態�
 
 2秒ごとに次の表示位置を使います。自動設定では最低12段階で一周し、長い文章では段階数を増やします。一周の時間を調整するには、`let pace = WidgetMarqueeSchedule(stepsPerPass: 30)` のように設定を作り、アプリでは `WidgetMarquee(text, schedule: pace)`、Widgetでは `WidgetMarquee.timeline(for: text, schedule: pace)` に渡します。30段階なら一周は約60秒です。指定できる範囲は2〜3,600段階です。
 
-スケジュールは5分ぶんの151エントリをまとめて返し、4分後の再読み込みをWidgetKitに依頼します。各位置は絶対時刻に対応するため、次のタイムラインでも続きから表示できます。iOS 27.2のiPhone 17 Proシミュレータでは、操作せずに複数回折り返し、最初の5分を超えても次のタイムラインで更新が続くことを確認しました。
+既定のスケジュールは5分ぶんの151エントリをまとめて返し、4分後の再読み込みをWidgetKitに依頼します。各位置は絶対時刻に対応するため、次のタイムラインでも続きから表示できます。iOS 27.2のiPhone 17 Proシミュレータでは、操作せずに複数回折り返し、最初の5分を超えても次のタイムラインで更新が続くことを確認しました。
 
 **2秒間隔は実験用の設定です。** Appleの推奨するエントリ間隔の目安は約5分以上です。OSは更新をまとめたり遅らせたりするため、コマ送りになることがあり、予定を使い切ると次の読み込みまで最後の位置で待ちます。上の画像と検証記録の対象はホーム画面Widgetです。実機での電力消費や長時間の更新間隔は未計測です。[WidgetKitの更新仕様](https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date/)
 

@@ -10,12 +10,31 @@ public struct WidgetMarqueeEntry: TimelineEntry, Sendable {
     /// The schedule used to derive the scroll position from the date.
     public let schedule: WidgetMarqueeSchedule
 
+    // Generated timelines target this upcoming position during the current entry.
+    let nextDate: Date?
+
+    init(_ text: String, date: Date, schedule: WidgetMarqueeSchedule, nextDate: Date?) {
+        self.text = text
+        self.date = date
+        self.schedule = schedule
+        self.nextDate = nextDate
+    }
+
     /// Creates a single entry, for example for a placeholder or snapshot.
     ///
     /// Omitting the schedule chooses the number of positions based on the length of the text.
     public init(_ text: String, date: Date = .now, schedule: WidgetMarqueeSchedule? = nil) {
-        self.text = text
-        self.date = date
-        self.schedule = schedule ?? WidgetMarqueeSchedule(for: text)
+        self.init(text, date: date, schedule: schedule ?? WidgetMarqueeSchedule(for: text), nextDate: nil)
+    }
+
+    /// Creates an entry with the supplied travel speed, timing, and loop pause.
+    public init(
+        _ text: String, date: Date = .now, pointsPerSecond: CGFloat? = nil,
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0
+    ) {
+        let schedule = WidgetMarqueeSchedule(
+            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops
+        )
+        self.init(text, date: date, schedule: schedule)
     }
 }

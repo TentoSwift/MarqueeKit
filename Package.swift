@@ -12,6 +12,8 @@ let package = Package(
             name: "WidgetMarquee",
             resources: [
                 .copy("Resources/WidgetMarqueeStopwatch.ttf"),
+                .copy("Resources/WidgetMarqueeSpeed.ttf"),
+                .copy("Resources/WidgetMarqueePlayback.ttf"),
                 .copy("Resources/WidgetMarqueeTimerGate.ttf")
             ]
         ),

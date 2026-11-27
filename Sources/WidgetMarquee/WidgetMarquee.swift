@@ -10,13 +10,11 @@ import WidgetKit
 public struct WidgetMarquee: View {
     private let text: String
     private let date: Date?
+    private var nextDate: Date?
     private let schedule: WidgetMarqueeSchedule
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var reducedLuminance
-
-    private static let typeface = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
-    private static let gap: CGFloat = 28
 
     /// Creates a marquee for an app. Text that overflows scrolls using a SwiftUI timeline.
     /// Omitting the schedule adapts the number of positions to the length of the text.
@@ -26,9 +24,21 @@ public struct WidgetMarquee: View {
         self.schedule = schedule ?? WidgetMarqueeSchedule(for: text)
     }
 
+    /// Sets the average travel speed, the timing within each pass, and an optional pause between passes.
+    public init(
+        _ text: String, pointsPerSecond: CGFloat? = nil,
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0
+    ) {
+        let schedule = WidgetMarqueeSchedule(
+            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops
+        )
+        self.init(text, schedule: schedule)
+    }
+
     /// Displays the text at the position scheduled for this widget entry.
     public init(_ entry: WidgetMarqueeEntry) {
         self.init(entry.text, date: entry.date, schedule: entry.schedule)
+        self.nextDate = entry.nextDate
     }
 
     /// Creates a marquee for the entry displayed at `date`.
@@ -41,6 +51,17 @@ public struct WidgetMarquee: View {
         self.schedule = schedule
     }
 
+    /// Displays a custom widget entry with the supplied travel speed, timing, and pause.
+    public init(
+        _ text: String, date: Date, pointsPerSecond: CGFloat? = nil,
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0
+    ) {
+        let schedule = WidgetMarqueeSchedule(
+            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops
+        )
+        self.init(text, date: date, schedule: schedule)
+    }
+
     /// Builds a WidgetKit timeline for the supplied text.
     ///
     /// Omitting the schedule adapts the number of positions to the text length.
@@ -51,24 +72,45 @@ public struct WidgetMarquee: View {
         schedule: WidgetMarqueeSchedule? = nil
     ) -> Timeline<WidgetMarqueeEntry> {
         let schedule = schedule ?? WidgetMarqueeSchedule(for: text)
-        return schedule.timeline(from: date) { entryDate in
-            WidgetMarqueeEntry(text, date: entryDate, schedule: schedule)
-        }
+        return schedule.timeline(from: date, entryWithNextDate: { date, next in
+            WidgetMarqueeEntry(text, date: date, schedule: schedule, nextDate: next)
+        })
+    }
+
+    /// Builds a widget timeline with an optional speed in points per second, timing profile, and loop pause.
+    /// WidgetKit controls when each scheduled position appears.
+    public nonisolated static func timeline(
+        for text: String, from date: Date = .now, pointsPerSecond: CGFloat? = nil,
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0
+    ) -> Timeline<WidgetMarqueeEntry> {
+        let schedule = WidgetMarqueeSchedule(
+            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops
+        )
+        return timeline(for: text, from: date, schedule: schedule)
     }
 
     public var body: some View {
-        let line = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).joined(separator: " ")
-        let textWidth = ceil((line as NSString).size(withAttributes: [.font: Self.typeface]).width)
-        let label = Text(verbatim: line).font(Font(Self.typeface)).lineLimit(1)
+        let line = WidgetMarqueeMetrics.line(from: text)
+        let textWidth = WidgetMarqueeMetrics.textWidth(for: line)
+        let label = Text(verbatim: line).font(Font(WidgetMarqueeMetrics.font)).lineLimit(1)
 
         GeometryReader { viewport in
-            if textWidth <= viewport.size.width || reduceMotion || reducedLuminance {
+            if textWidth <= viewport.size.width || reduceMotion || reducedLuminance || schedule.passDuration == 0 {
                 label.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             } else if let date {
-                movingLine(label, at: date, textWidth: textWidth, in: viewport.size)
+                // A generated entry moves toward its successor during this interval.
+                // At the stop boundary it has already reached the head of the line.
+                let target = nextDate ?? date
+                let start = nextDate == nil ? schedule.previousSample(before: date) : date
+                movingLine(label, at: target, textWidth: textWidth, in: viewport.size, from: start)
+            } else if schedule.passDuration != nil {
+                TimelineView(.animation) { context in
+                    movingLine(label, at: context.date, textWidth: textWidth, in: viewport.size)
+                }
             } else {
                 TimelineView(.periodic(from: Date(timeIntervalSinceReferenceDate: 0), by: schedule.secondsPerStep)) { context in
-                    movingLine(label, at: context.date, textWidth: textWidth, in: viewport.size)
+                    movingLine(label, at: context.date, textWidth: textWidth, in: viewport.size,
+                               from: context.date.addingTimeInterval(-schedule.secondsPerStep))
                 }
             }
         }
@@ -77,15 +119,18 @@ public struct WidgetMarquee: View {
         .accessibilityLabel(Text(verbatim: text))
     }
 
-    private func movingLine(_ label: some View, at date: Date, textWidth: CGFloat, in size: CGSize) -> some View {
-        ZStack(alignment: .leading) {
+    private func movingLine(
+        _ label: some View, at date: Date, textWidth: CGFloat, in size: CGSize, from start: Date? = nil
+    ) -> some View {
+        let animation = start.flatMap { schedule.entryAnimation(from: $0, to: date) }
+        return ZStack(alignment: .leading) {
             ForEach(0..<3, id: \.self) { copy in
-                let lane = schedule.lane(at: date, copy: copy)
-                let shift = (textWidth + Self.gap) * (1 - CGFloat(lane) / CGFloat(schedule.stepsPerPass))
+                let lane = schedule.position(at: date, copy: copy)
+                let shift = (textWidth + WidgetMarqueeMetrics.gap) * (1 - CGFloat(lane))
                 label
                     .fixedSize()
                     .offset(x: shift)
-                    .animation(lane == 0 ? nil : .linear(duration: schedule.secondsPerStep), value: lane)
+                    .animation(lane == 0 ? nil : animation, value: lane)
                     // A returning copy may skip the offscreen reset entry.
                     // A new identity keeps it from animating backwards across the line.
                     .id(schedule.copyCycle(at: date, copy: copy))
@@ -95,5 +140,50 @@ public struct WidgetMarquee: View {
         .frame(width: size.width, height: size.height, alignment: .leading)
         .clipped()
         .environment(\.layoutDirection, .leftToRight)
+    }
+
+}
+
+extension WidgetMarqueeSchedule {
+    func entryAnimation(from start: Date, to end: Date) -> Animation? {
+        let interval = end.timeIntervalSince(start)
+        guard interval > 0 else { return nil }
+        let linear = Animation.linear(duration: interval)
+        guard let pass = passDuration else { return linear }
+        guard pass >= interval else { return nil }
+
+        // Copies reset offscreen once per three passes. The distance here is
+        // always leftward, including the interval that ends at the loop head.
+        var distance = position(at: end, copy: 0) - position(at: start, copy: 0)
+        if distance < -1e-12 { distance += 3 }
+        guard distance > 1e-12 else { return nil }
+        guard timing == .easeInOut else { return linear }
+
+        // Match the smoothstep slopes at both ends of the actual scheduled
+        // interval. Intermediate entries do not restart the easing curve.
+        let first = min(1, elapsedInCycle(at: start) / pass)
+        let last = min(1, elapsedInCycle(at: end) / pass)
+        let scale = 2 * (interval / pass) / distance
+        let firstControl = min(1, first * (1 - first) * scale)
+        let lastControl = max(0, 1 - last * (1 - last) * scale)
+        return .timingCurve(1.0 / 3, firstControl, 2.0 / 3, lastControl, duration: interval)
+    }
+}
+
+// The timeline provider and view must use the same layout to convert distance to time.
+enum WidgetMarqueeMetrics {
+    static let font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+    static let gap: CGFloat = 28
+
+    static func line(from text: String) -> String {
+        text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).joined(separator: " ")
+    }
+
+    static func textWidth(for line: String) -> CGFloat {
+        ceil((line as NSString).size(withAttributes: [.font: font]).width)
+    }
+
+    static func repeatWidth(for line: String) -> CGFloat {
+        textWidth(for: line) + gap
     }
 }
