@@ -9,12 +9,13 @@ final class LiveRepeatSpacingTests: XCTestCase {
 
     @MainActor
     func testRestartCopiesShareOneClockAndKeepTheirSpacing() throws {
-        let marquee = LiveActivityMarquee("手順", startedAt: .distantPast, pointsPerSecond: 42, repeatSpacing: 80)
-        let (strip, clocks) = marquee.horizontalCopies("手順", units: 1, endsWithGap: false)
-        XCTAssertEqual(clocks, 1)
         let message = Text(verbatim: "手順").font(Font(WidgetMarqueeMetrics.font))
-        XCTAssertEqual(try renderedWidth(of: strip) - renderedWidth(of: Text("\(message)\(message)")),
-                       80, accuracy: 0.5)
+        for gap in spacings {
+            let marquee = LiveActivityMarquee("手順", startedAt: .distantPast, pointsPerSecond: 42, repeatSpacing: gap)
+            let strip = marquee.horizontalContent("手順", units: 1)
+            XCTAssertEqual(try renderedWidth(of: strip) - renderedWidth(of: Text("\(message)\(message)")),
+                           gap, accuracy: 0.5)
+        }
     }
 
     @MainActor

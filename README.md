@@ -2,20 +2,20 @@
 
 MarqueeKitはSwiftUIアプリ、ホーム画面Widget、Live Activityで文字列を自動スクロールするSwift Packageです。横送りでは1行を左に、縦送りでは文字を縦1列に並べて上に送ります。表示領域に収まる文章は静止し、長い文章は末尾から先頭に戻って繰り返します。対応環境はiOS 17以降、Swift tools 5.9以降です。
 
-実機では、次の周回が始まるときに曲名が1フレームだけ暗くなることがあります。iPhone Duoでは、展開したDynamic Islandの描画データがOSの上限を超えると、Live Activityが終了する場合があります。
+1.8.0では、Live Activityの横送りが再開する瞬間に文字が1フレームだけ暗くなる問題を修正しました。iPhone Duoでは、展開したDynamic Islandの描画データがOSの上限を超えると、Live Activityが終了する場合があります。
 
 ![ロック画面で曲名とアーティスト名が左に流れ、先頭に戻って一緒に再開する様子](Documentation/now-playing.gif)
 
-動画は開発中の再生カードをiPhoneシミュレータで録画したものです。[ロック画面のデモを見る（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.8.0-beta.1/now-playing.mp4)
+動画は開発中の再生カードをiPhoneシミュレータで録画したものです。[ロック画面のデモを見る（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.8.0/now-playing.mp4)
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/MarqueeKit.git` を指定します。**Dependency Rule** で **Exact Version** を選び、`1.8.0-beta.1` を入力します。マーキーを表示するアプリやWidget Extensionのターゲットに製品 `MarqueeKit` を追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/MarqueeKit.git` を指定し、**Up to Next Major Version** の開始バージョンに `1.8.0` を入力します。マーキーを表示するアプリやWidget Extensionのターゲットに製品 `MarqueeKit` を追加します。
 
 Swift Packageから利用する場合は、`Package.swift` の `dependencies` にリポジトリを追加します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/MarqueeKit.git", exact: "1.8.0-beta.1")
+.package(url: "https://github.com/TentoSwift/MarqueeKit.git", from: "1.8.0")
 ```
 
 利用するターゲットの `dependencies` には製品を指定します。
@@ -35,7 +35,7 @@ Swift Packageから利用する場合は、`Package.swift` の `dependencies` �
 
 ![展開したDynamic Islandで曲名とアーティスト名が流れる様子](Documentation/now-playing-island.gif)
 
-[展開したDynamic Islandのデモを見る（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.8.0-beta.1/now-playing-island.mp4)
+[展開したDynamic Islandのデモを見る（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.8.0/now-playing-island.mp4)
 
 </details>
 

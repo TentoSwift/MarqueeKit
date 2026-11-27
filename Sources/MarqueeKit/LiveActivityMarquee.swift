@@ -152,13 +152,18 @@ public struct LiveActivityMarquee: View {
 
     @ViewBuilder
     private func moving(_ line: String, contentLength: CGFloat, length: CGFloat, inset: CGFloat) -> some View {
-        let period = axis == .vertical
+        let scheduledPeriod = axis == .vertical
             ? contentLength + (repeatSpacing ?? WidgetMarqueeMetrics.gap)
             : WidgetMarqueeMetrics.liveRepeatWidth(for: line, font: horizontalFont, repeatSpacing: repeatSpacing)
+        let usesPlayback = axis == .vertical || sharedCycle != nil || repeatSpacing != nil || ramps != nil
+            || timing != .linear || pauseBetweenLoops > 0 || line.utf8.count > Self.shortLineBytes
+        let measuresStrip = axis == .horizontal && (usesPlayback || pointsPerSecond == nil)
+        let period = measuresStrip ? renderedRepeatWidth(for: line, fallback: scheduledPeriod) : scheduledPeriod
         // An inset wider than the loop gap exposes the end of the preceding copy.
-        let previous = inset > period - contentLength ? 1 : 0
-        if axis == .vertical || sharedCycle != nil || repeatSpacing != nil || ramps != nil || timing != .linear || pauseBetweenLoops > 0 || line.utf8.count > Self.shortLineBytes {
-            let baseTravel = pointsPerSecond.map { Double(period / $0) } ?? 10
+        let gap = repeatSpacing ?? (scheduledPeriod - contentLength)
+        let previous = inset > gap ? 1 : 0
+        if usesPlayback {
+            let baseTravel = pointsPerSecond.map { Double(scheduledPeriod / $0) } ?? 10
             let motion = sharedCycle?.motion ?? ramps.flatMap {
                 WidgetMarqueeGroup.Motion.custom($0, baseTravel: baseTravel, fixedDuration: pointsPerSecond == nil)
             }
@@ -227,12 +232,16 @@ public struct LiveActivityMarquee: View {
     }
 
     private func messageStrip(_ text: String) -> Text {
-        // WidgetKit can overlap glyphs when it archives a very wide text run.
-        // Keep grapheme clusters intact and separate runs with a subpixel
-        // baseline difference. VoiceOver uses the original message on the view.
         if text.utf8.count <= 512 { return Text(verbatim: text).font(Font(typeface)) }
-        let font = Font(typeface)
-        var runs: [Text] = []
+        return Text(attributedMessage(text)).font(Font(typeface))
+    }
+
+    private func attributedMessage(_ text: String) -> AttributedString {
+        guard text.utf8.count > 512 else { return AttributedString(text) }
+        // WidgetKit can overlap glyphs in wide runs. Alternate a subpixel baseline
+        // offset to keep runs separate without splitting grapheme clusters.
+        var message = AttributedString()
+        var alternate = false
         var start = text.startIndex
         while start < text.endIndex {
             let limit = text.index(start, offsetBy: 128, limitedBy: text.endIndex) ?? text.endIndex
@@ -242,11 +251,13 @@ public struct LiveActivityMarquee: View {
             } else {
                 end = limit
             }
-            let run = Text(verbatim: String(text[start..<end])).font(font)
-            runs.append(run.baselineOffset(runs.count.isMultiple(of: 2) ? 0 : 1.0 / 1024))
+            var run = AttributedString(String(text[start..<end]))
+            run.baselineOffset = alternate ? 1.0 / 1024 : 0
+            message.append(run)
+            alternate.toggle()
             start = end
         }
-        return Self.joined(runs)
+        return message
     }
 
     static func joined(_ segments: [Text]) -> Text {
@@ -308,11 +319,10 @@ public struct LiveActivityMarquee: View {
         _ line: String, units: Int, endsWithGap: Bool = false, ruler: Font, prefixPeriods: Int,
         period: CGFloat, width: CGFloat, inset: CGFloat, showsHours: Bool = true
     ) -> some View {
-        let (strip, copies) = horizontalCopies(line, units: units, endsWithGap: endsWithGap)
+        let strip = horizontalContent(line, units: units, endsWithGap: endsWithGap)
         let row = { (date: Date) in
-            let timer = clock(startingAt: date, showsHours: showsHours)
-            return anchoredCopies(strip, clock: timer, ruler: ruler, count: copies,
-                                  prefixPeriods: prefixPeriods, period: period, width: width, inset: inset)
+            clockStrip(clock(startingAt: date, showsHours: showsHours), ruler: ruler, strip: strip,
+                       prefixPeriods: prefixPeriods, period: period, width: width, inset: inset)
         }
         #if canImport(SwiftUICore)
         // Limit the repeated text archived in each layer to three short lines and their gaps.
@@ -328,29 +338,35 @@ public struct LiveActivityMarquee: View {
         #endif
     }
 
-    func horizontalCopies(_ line: String, units: Int, endsWithGap: Bool) -> (Text, Int) {
-        if let spacing = repeatSpacing, !endsWithGap {
-            // At wraparound the visible head switches copies. Keep those copies
-            // in one timer Text so WidgetKit advances them in the same frame.
-            let message = messageStrip(line)
-            let unit = Text("\(message)\(Self.spacer(spacing))")
-            return (Self.joined(Array(repeating: unit, count: units) + [message]), 1)
-        } else {
-            let strip = endsWithGap ? repeatedLine(line, units: units, endsWithGap: true) : messageStrip(line)
-            return (strip, endsWithGap ? 1 : units + 1)
+    func horizontalContent(_ line: String, units: Int, endsWithGap: Bool = false) -> Text {
+        guard let spacing = repeatSpacing else { return repeatedLine(line, units: units, endsWithGap: endsWithGap) }
+        // Keep both copies and their gap in the message font. A separate spacer font
+        // can change the shaped distance between heads in WidgetKit's archived Text.
+        let spaces = "    "
+        var gap = AttributedString(spaces)
+        let naturalWidth = (spaces as NSString).size(withAttributes: [.font: typeface]).width
+        gap.kern = (spacing - naturalWidth) / CGFloat(spaces.count)
+        let message = attributedMessage(line)
+        var strip = AttributedString()
+        for _ in 0..<units {
+            strip.append(message)
+            strip.append(gap)
         }
+        if !endsWithGap { strip.append(message) }
+        return Text(strip).font(Font(typeface))
     }
 
-    // WidgetKit can shape a repeated Text with a different pitch than UIKit.
-    // Give each copy its own fixed origin so both endpoints share the same leading edge.
-    func anchoredCopies(_ strip: Text, clock: Text, ruler: Font, count: Int, prefixPeriods: Int,
-                        period: CGFloat, width: CGFloat, inset: CGFloat) -> some View {
-        ZStack(alignment: .leading) {
-            ForEach(0..<count, id: \.self) { copy in
-                clockStrip(clock, ruler: ruler, strip: strip, prefixPeriods: prefixPeriods - copy,
-                           period: period, width: width, inset: inset)
-            }
+    func renderedRepeatWidth(for line: String, fallback: CGFloat) -> CGFloat {
+        func width(of text: Text) -> CGFloat {
+            let renderer = ImageRenderer(content: text.fixedSize().environment(\.layoutDirection, .leftToRight))
+            var width: CGFloat = 0
+            renderer.render { size, _ in width = size.width }
+            return width
         }
+        // Measuring the gap between two heads retains the spacing that a trailing
+        // space alone can lose. Only ask SwiftUI for the size, without drawing pixels.
+        let pitch = width(of: horizontalContent(line, units: 1)) - width(of: messageStrip(line))
+        return pitch.isFinite && pitch > 0 ? pitch : fallback
     }
 
     #if canImport(SwiftUICore)
@@ -383,7 +399,7 @@ public struct LiveActivityMarquee: View {
         }
     }
 
-    private func clockStrip(
+    func clockStrip(
         _ clock: Text, ruler: Font, strip: Text, prefixPeriods: Int, period: CGFloat, width: CGFloat, inset: CGFloat
     ) -> some View {
         // Keep the invisible clock to the left of right-to-left messages.
