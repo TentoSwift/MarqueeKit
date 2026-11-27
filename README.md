@@ -6,12 +6,12 @@ iOSアプリ、ホーム画面Widget、Live Activityで、1行に収まらない
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.4.0` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.4.1` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
 
 `Package.swift` から追加する場合は、`dependencies` に次の行を指定します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.4.0")
+.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.4.1")
 ```
 
 ## SwiftUIアプリで使う
@@ -33,7 +33,7 @@ struct MessageView: View {
 
 ## スクロールの速度、加減速、周回の待ち時間
 
-`pointsPerSecond` は移動中の平均速度で、単位は画面上のポイント毎秒です。`.easeInOut` は各周の始めと終わりでゆっくり動き、中央で最も速くなります。一周して文章の先頭に戻ると、`pauseBetweenLoops` に指定した秒数だけその位置で待ちます。
+`pointsPerSecond` は移動中の平均速度で、単位は画面上のポイント毎秒です。単独の行に `.easeInOut` を指定すると、各周の始めと終わりでゆっくり動き、中央で最も速くなります。一周して文章の先頭に戻ると、`pauseBetweenLoops` に指定した秒数だけその位置で待ちます。
 
 ```swift
 // SwiftUIアプリ
@@ -68,7 +68,9 @@ VStack(alignment: .leading) {
 
 SwiftUIアプリでは同じ `group.rows` を `WidgetMarquee(row)` に渡します。`startedAt` にはアプリの状態に保存した開始日時、またはLive Activityの開始属性を使い、ビューを描き直しても同じ日時を渡してください。別々に周回させる場合は、従来どおり文章を各ビューに直接渡します。
 
-行ごとに速度や表示幅が異なる場合は `items:` を使えます。`viewportWidth` にはラベルや余白を除いた本文の実際の幅を渡すと、幅に収まる行を共通周期の計算から除外できます。速度0の行もほかの行を待たせません。
+同じ `pointsPerSecond` と `.easeInOut` を指定した行は、文章の長さが違っても、一緒に動いている間は同じ速さで進みます。短い行が一周するときは両方が滑らかに減速し、短い行は先頭で待ち、長い行はすぐに加速して残りを進みます。`.linear` を指定すると、各行は一周するまで一定の速度で進みます。[同じ速度で加減速する2行の録画（MP4）](https://github.com/TentoSwift/WidgetMarquee/releases/download/1.4.1/synchronized-marquee-speed.mp4)
+
+表示幅に収まる行がある場合は、`viewportWidth` にラベルや余白を除いた本文の幅を渡してください。グループはその行を加減速と待ち時間の計算から除外します。行ごとに速度や表示幅が異なる場合は `items:` を使えます。速度0の行もほかの行を待たせません。
 
 ```swift
 let group = WidgetMarqueeGroup(items: [
@@ -136,7 +138,7 @@ iPhone 17 Proシミュレータ（iOS 27.2）で日本語の文章を表示し�
 
 ![ロック画面のLive Activityで「自動」行の日本語が左へ流れて一周する様子](Documentation/live-activity-smooth.gif)
 
-AppleのFrameworks Engineerは、タイマーとカスタムフォントを使うアニメーションをサポート対象外としており、電池や性能への影響を指摘しています。実際の更新頻度はOSや表示状態に左右されます。Live Activityで加減速、待機、複数行の同期を指定すると一周を4,096段階で表すため、文章や待ち時間が非常に長いと、文字送りの刻みが目立つことがあります。[Appleの技術者による説明](https://developer.apple.com/forums/thread/757696)
+AppleのFrameworks Engineerは、タイマーとカスタムフォントを使うアニメーションをサポート対象外としており、電池や性能への影響を指摘しています。実際の更新頻度はOSや表示状態に左右されます。Live Activityで加減速、待機、複数行の同期を指定すると一周を4,096段階で表すため、文章や待ち時間が非常に長いと、文字送りの刻みが目立つことがあります。グループの加減速は共通の時刻で移動距離を補間するため、画面上で各行が止まる時刻には丸めが入ります。[Appleの技術者による説明](https://developer.apple.com/forums/thread/757696)
 
 ### サンプルを実行する
 

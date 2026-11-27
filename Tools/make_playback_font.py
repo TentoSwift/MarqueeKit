@@ -28,9 +28,17 @@ PHASES = [f"p{phase}" for phase in range(PHASE_COUNT)]
 ACCUMULATORS = [f"a{phase}" for phase in range(PHASE_COUNT)]
 ADD_BITS = [f"o{bit}" for bit in range(BIT_COUNT)]
 EASED_PHASES = [f"e{phase}" for phase in range(PHASE_COUNT)]
+GROUP_PHASES = [f"g{phase}" for phase in range(PHASE_COUNT)]
+# Use a denser grid near the beginning for short passes followed by long pauses.
+# The last sample is the end of a pass, before phase zero resets the clock.
+GROUP_SAMPLES = [
+    *range(16), *range(16, 32, 2), *range(32, 64, 4), *range(64, 128, 8),
+    *range(128, 256, 16), *range(256, PHASE_COUNT + 1, 32),
+]
+GROUP_AXES = [f"P{index:03d}" for index in range(len(GROUP_SAMPLES))]
 GLYPH_ORDER = [
     ".notdef", "blank", "colon", "decimal", *DIGITS, *POSITIONAL_DIGITS,
-    *PHASES, *ACCUMULATORS, *ADD_BITS, *EASED_PHASES,
+    *PHASES, *ACCUMULATORS, *ADD_BITS, *EASED_PHASES, *GROUP_PHASES,
 ]
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / "Sources/WidgetMarquee/Resources/WidgetMarqueePlayback.ttf"
 
@@ -43,7 +51,7 @@ def setup_substitutions(builder):
     rules = [
         "languagesystem DFLT dflt;", "languagesystem latn dflt;",
         glyph_class("d", DIGITS), glyph_class("ph", PHASES), glyph_class("acc", ACCUMULATORS),
-        glyph_class("out", EASED_PHASES), glyph_class("ops", ADD_BITS),
+        glyph_class("out", EASED_PHASES), glyph_class("ops", ADD_BITS), glyph_class("group", GROUP_PHASES),
     ]
     for place, _ in CLOCK_PLACES:
         rules.append(glyph_class(place, [f"{place}{digit}" for digit in range(10)]))
@@ -86,6 +94,7 @@ def setup_substitutions(builder):
     rules.extend([
         "} add;", "feature rlig {", f"sub @acc' {additions};", "} rlig;",
         "feature EASE { sub @acc by @out; } EASE;",
+        "feature GRUP { sub @acc by @group; } GRUP;",
     ])
     addOpenTypeFeaturesFromString(builder.font, "\n".join(rules))
 
@@ -101,11 +110,12 @@ def advance_width(phase, moving_fraction, eased):
     return round(FULL_ADVANCE * (1 - progress))
 
 
-def setup_duty_axis(builder):
+def setup_playback_axes(builder):
     # DUTY is travel / (travel + pause). The extra samples near zero resolve
     # short movements followed by long holds. Each sample defines one HVAR region.
     samples = sorted({0.0, 1.0, *(i / 128 for i in range(1, 128)), *(2 ** -i for i in range(8, 16))})
-    builder.setupFvar([("DUTY", 0, 1, 1, "Moving fraction")], [])
+    builder.setupFvar([("DUTY", 0, 1, 1, "Moving fraction"),
+                       *((tag, 0, 0, 1, f"Group phase {phase}") for tag, phase in zip(GROUP_AXES, GROUP_SAMPLES))], [])
     builder.setupGvar({})
     regions = []
     for index, value in enumerate(samples[:-1]):
@@ -122,10 +132,24 @@ def setup_duty_axis(builder):
             row_for_glyph[glyph] = len(rows)
             rows.append([advance_width(phase, sample, eased) - default for sample in samples[:-1]])
 
+    data = [buildVarData(list(range(len(regions))), rows)]
+    first_group_region = len(regions)
+    regions.extend({tag: (0, 1, 1)} for tag in GROUP_AXES)
+    # Swift supplies the remaining width at each sampled phase. Each glyph only
+    # needs the two neighboring samples, linearly weighted at its exact phase.
+    for index, (start, end) in enumerate(zip(GROUP_SAMPLES, GROUP_SAMPLES[1:])):
+        widths = []
+        for phase in range(start, end):
+            right = round(FULL_ADVANCE * (phase - start) / (end - start))
+            row_for_glyph[GROUP_PHASES[phase]] = len(data) << 16 | len(widths)
+            widths.append([FULL_ADVANCE - right, right])
+        left_region = first_group_region + index
+        data.append(buildVarData([left_region, left_region + 1], widths))
+
     table = otTables.HVAR()
     table.Version = 0x00010000
-    region_list = buildVarRegionList(regions, ["DUTY"])
-    table.VarStore = buildVarStore(region_list, [buildVarData(list(range(len(regions))), rows)])
+    region_list = buildVarRegionList(regions, ["DUTY", *GROUP_AXES])
+    table.VarStore = buildVarStore(region_list, data)
     table.AdvWidthMap = buildDeltaSetIndexMap([row_for_glyph[name] for name in GLYPH_ORDER])
     table.LsbMap = None
     table.RsbMap = None
@@ -154,7 +178,7 @@ def build_font(output=DEFAULT_PATH):
     })
     builder.setupPost()
     setup_substitutions(builder)
-    setup_duty_axis(builder)
+    setup_playback_axes(builder)
     builder.font["head"].created = builder.font["head"].modified = 3850000000
     builder.font.recalcTimestamp = False
     builder.save(output)

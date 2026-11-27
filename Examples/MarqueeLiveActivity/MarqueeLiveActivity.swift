@@ -29,11 +29,15 @@ struct MarqueeLiveActivity: Widget {
     private func marquee(_ context: ActivityViewContext<MarqueeActivityAttributes>) -> some View {
         let speed = context.state.pointsPerSecond.map { CGFloat($0) }
         if let second = context.state.secondText, !second.isEmpty {
-            let group = WidgetMarqueeGroup([context.state.text, second], startedAt: context.attributes.startedAt,
-                                          pointsPerSecond: speed ?? 40, timing: .easeInOut, pauseBetweenLoops: 2)
-            VStack(alignment: .leading) {
-                ForEach(group.rows) { row in LiveActivityMarquee(row) }
+            GeometryReader { viewport in
+                let group = WidgetMarqueeGroup([context.state.text, second], startedAt: context.attributes.startedAt,
+                                               pointsPerSecond: speed ?? 40, timing: .easeInOut, pauseBetweenLoops: 2,
+                                               viewportWidth: viewport.size.width)
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(group.rows) { row in LiveActivityMarquee(row) }
+                }
             }
+            .frame(height: 2 * 23 + 4)
         } else {
             LiveActivityMarquee(context.state.text, startedAt: context.attributes.startedAt,
                                pointsPerSecond: speed, timing: .easeInOut, pauseBetweenLoops: 2)

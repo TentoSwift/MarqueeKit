@@ -16,7 +16,7 @@ public struct LiveActivityMarquee: View {
     private let pointsPerSecond: CGFloat?
     private let timing: WidgetMarqueeTiming
     private let pauseBetweenLoops: TimeInterval
-    private let sharedCycle: (travel: TimeInterval, duration: TimeInterval)?
+    private let sharedCycle: (travel: TimeInterval, duration: TimeInterval, motion: WidgetMarqueeGroup.Motion?)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var reducedLuminance
@@ -85,7 +85,7 @@ public struct LiveActivityMarquee: View {
         self.pointsPerSecond = row.pointsPerSecond
         self.timing = row.timing
         self.pauseBetweenLoops = 0
-        self.sharedCycle = (row.liveTravelDuration, row.liveCycleDuration)
+        self.sharedCycle = (row.liveTravelDuration, row.liveCycleDuration, row.liveMotion)
     }
 
     public var body: some View {
@@ -111,7 +111,7 @@ public struct LiveActivityMarquee: View {
                             let base = CTFontCreateWithName(face as CFString, 14, nil)
                             let ruler = Font(WidgetMarqueePlayback.font(
                                 base, period: period, travelDuration: travel, pause: pauseBetweenLoops,
-                                timing: timing, cycleDuration: sharedCycle?.duration
+                                timing: timing, cycleDuration: sharedCycle?.duration, groupMotion: sharedCycle?.motion
                             ))
                             let strip = Self.messageStrip(unit + line)
                             clockStrip(systemClock, ruler: ruler, strip: strip, prefixPeriods: 1, period: period, width: width)

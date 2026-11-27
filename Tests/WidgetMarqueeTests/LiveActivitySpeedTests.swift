@@ -92,6 +92,43 @@ final class LiveActivitySpeedTests: XCTestCase {
     }
 
     @MainActor
+    func testEasedGroupClockMatchesPointDisplacementsUntilEachRowArrives() throws {
+        let base = try bundledFont("WidgetMarqueePlayback")
+        let texts = ["東京から Kyoto", "東京から 京都を経由して 大阪へ",
+                     "東京から 京都を経由して 大阪へ向かう列車です"]
+        let speed: CGFloat = 55
+        let group = WidgetMarqueeGroup(texts, startedAt: .distantPast, pointsPerSecond: speed,
+                                       timing: .easeInOut, pauseBetweenLoops: 2, viewportWidth: 20)
+        let periods = texts.map { WidgetMarqueeMetrics.liveRepeatWidth(for: $0) }
+        let travel = group.rows.map(\.liveTravelDuration)
+        let cycle = group.rows[0].liveCycleDuration
+        let rulers = try group.rows.enumerated().map { index, row in
+            WidgetMarqueePlayback.font(base, period: periods[index], travelDuration: travel[index], pause: 0,
+                                       timing: row.timing, cycleDuration: cycle, groupMotion: try XCTUnwrap(row.liveMotion))
+        }
+        // Measure the actual shaped advances of the native clock, including two
+        // different arrival points, time spent at the head, and a synchronized restart.
+        for tick in stride(from: 0, through: Int((cycle + travel[0]) * 100), by: 7) {
+            let stamp = String(format: "%d:%02d.%02d", tick / 6000, tick / 100 % 60, tick % 100)
+            let local = (Double(tick) / 100).truncatingRemainder(dividingBy: cycle)
+            let distances = rulers.indices.map { periods[$0] - advance(stamp, font: rulers[$0]) }
+            for index in rulers.indices {
+                let expected: Double
+                if let segment = travel.firstIndex(where: { $0 > local }), local < travel[index] {
+                    let start = segment == 0 ? 0 : travel[segment - 1]
+                    let length = travel[segment] - start
+                    let fraction = (local - start) / length
+                    expected = speed * (start + length * fraction * fraction * (3 - 2 * fraction))
+                    XCTAssertEqual(distances[index], distances.last!, accuracy: 0.1, stamp)
+                } else {
+                    expected = periods[index]
+                }
+                XCTAssertEqual(distances[index], expected, accuracy: 0.65, stamp)
+            }
+        }
+    }
+
+    @MainActor
     func testGroupFontsHoldShortRowThenRestartTogether() throws {
         let base = try bundledFont("WidgetMarqueePlayback")
         let texts = ["東京から 京都へ", "東京から 名古屋、京都を経由して 大阪へ 🚄"]
@@ -125,6 +162,32 @@ final class LiveActivitySpeedTests: XCTestCase {
                 XCTAssertEqual(actual, expected, accuracy: 0.5, "row \(index) at \(stamp)")
                 if elapsed > travel { XCTAssertEqual(actual, 0, accuracy: 0.001) }
             }
+        }
+    }
+
+    func testNearlyEqualEasedRowsStayAlignedThroughTheirFirstArrival() throws {
+        let base = try bundledFont("WidgetMarqueePlayback")
+        let speed: CGFloat = 55
+        for (periods, pause): ([CGFloat], Double) in [([1000, 1008], 2), ([100, 108], 110)] {
+            let travel = periods.map { Double($0 / speed) }
+            let cycle = travel[1] + pause
+            let profiles = WidgetMarqueeGroup.Motion.profiles(for: travel, timings: [.easeInOut, .easeInOut])
+            let rulers = try periods.indices.map { i in
+                WidgetMarqueePlayback.font(base, period: periods[i], travelDuration: travel[i], pause: 0,
+                                            timing: .easeInOut, cycleDuration: cycle,
+                                            groupMotion: try XCTUnwrap(profiles[travel[i]]))
+            }
+            for tick in 0...Int(travel[0] * 100) {
+                let stamp = String(format: "%d:%02d.%02d", tick / 6000, tick / 100 % 60, tick % 100)
+                let short = periods[0] - advance(stamp, font: rulers[0])
+                let long = periods[1] - advance(stamp, font: rulers[1])
+                XCTAssertEqual(short, long, accuracy: 0.15, stamp)
+            }
+            // Both widths reach zero during the shared pause, including a
+            // short pass followed by a hold that dominates the entire cycle.
+            let holdSecond = Int(ceil(travel[1])) + 1
+            let hold = String(format: "%d:%02d.00", holdSecond / 60, holdSecond % 60)
+            for ruler in rulers { XCTAssertEqual(advance(hold, font: ruler), 0, accuracy: 0.001) }
         }
     }
 }

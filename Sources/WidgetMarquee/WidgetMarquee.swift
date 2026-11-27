@@ -166,11 +166,9 @@ extension WidgetMarqueeSchedule {
 
         // Match the smoothstep slopes at both ends of the actual scheduled
         // interval. Intermediate entries do not restart the easing curve.
-        let first = min(1, elapsedInCycle(at: start) / pass)
-        let last = min(1, elapsedInCycle(at: end) / pass)
-        let scale = 2 * (interval / pass) / distance
-        let firstControl = min(1, first * (1 - first) * scale)
-        let lastControl = max(0, 1 - last * (1 - last) * scale)
+        let scale = (interval / pass) / (3 * distance)
+        let firstControl = min(1, speedFactor(at: start, pass: pass) * scale)
+        let lastControl = max(0, 1 - speedFactor(at: end, pass: pass) * scale)
         return .timingCurve(1.0 / 3, firstControl, 2.0 / 3, lastControl, duration: interval)
     }
 }

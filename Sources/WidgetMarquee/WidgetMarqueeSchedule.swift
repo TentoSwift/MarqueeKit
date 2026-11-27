@@ -21,6 +21,7 @@ public struct WidgetMarqueeSchedule: Sendable {
     // Legacy linear steps use nil. A zero duration represents stationary text.
     let passDuration: TimeInterval?
     private var groupCycle: (start: Date, duration: TimeInterval)?
+    private var groupMotion: WidgetMarqueeGroup.Motion?
 
     /// Creates a two-second schedule with the specified number of positions per pass.
     ///
@@ -62,6 +63,7 @@ public struct WidgetMarqueeSchedule: Sendable {
         self.init(travel: row.widgetTravelDuration, timing: row.timing,
                   pause: row.widgetCycleDuration - row.widgetTravelDuration)
         groupCycle = (row.startedAt, row.widgetCycleDuration)
+        groupMotion = row.widgetMotion
     }
 
     private init(travel duration: TimeInterval, timing: WidgetMarqueeTiming, pause: TimeInterval) {
@@ -123,7 +125,10 @@ public struct WidgetMarqueeSchedule: Sendable {
         let end = start.addingTimeInterval(150 * step)
         var samples = Set((0...150).map { start.addingTimeInterval(Double($0) * step) })
         for schedule in moving {
-            schedule.insertBoundaries(in: start..<end, minimumInterval: step, into: &samples)
+            // A whole group's schedules already contribute one stop per row.
+            // Also include sibling stops when building a single row's timeline.
+            schedule.insertBoundaries(in: start..<end, minimumInterval: step,
+                                      includeSiblingStops: moving.count == 1, into: &samples)
         }
         let dates = Array(samples.sorted().prefix(151))
         let entries = dates.indices.map { index in
@@ -133,7 +138,8 @@ public struct WidgetMarqueeSchedule: Sendable {
         return Timeline(entries: entries, policy: .after(dates[min(120, dates.count - 1)]))
     }
 
-    private func insertBoundaries(in range: Range<Date>, minimumInterval: TimeInterval, into dates: inout Set<Date>) {
+    private func insertBoundaries(in range: Range<Date>, minimumInterval: TimeInterval, includeSiblingStops: Bool,
+                                  into dates: inout Set<Date>) {
         guard let travel = passDuration, groupCycle != nil || pauseBetweenLoops > 0 else { return }
         let origin = groupCycle?.start ?? Date(timeIntervalSinceReferenceDate: 0)
         if groupCycle != nil, range.contains(origin) { dates.insert(origin) }
@@ -147,6 +153,12 @@ public struct WidgetMarqueeSchedule: Sendable {
             let lapStart = origin.addingTimeInterval(lap * cycleDuration)
             guard lapStart < range.upperBound else { break }
             if range.contains(lapStart) { dates.insert(lapStart) }
+            if includeSiblingStops, let groupMotion {
+                for arrival in groupMotion.arrivals.dropLast() {
+                    let stop = lapStart.addingTimeInterval(arrival)
+                    if range.contains(stop) { dates.insert(stop) }
+                }
+            }
             if pauseBetweenLoops > 0 {
                 let stop = lapStart.addingTimeInterval(travel)
                 if range.contains(stop) { dates.insert(stop) }
@@ -159,7 +171,7 @@ public struct WidgetMarqueeSchedule: Sendable {
     // A standalone dated view has no following entry. Use the actual interval
     // since the preceding grid, stop, or restart for its transition to that date.
     func previousSample(before date: Date) -> Date {
-        guard pauseBetweenLoops > 0, let pass = passDuration, cycleDuration >= secondsPerStep else {
+        guard groupCycle != nil || pauseBetweenLoops > 0, let pass = passDuration, cycleDuration >= secondsPerStep else {
             return date.addingTimeInterval(-secondsPerStep)
         }
         let time = date.timeIntervalSinceReferenceDate
@@ -168,11 +180,13 @@ public struct WidgetMarqueeSchedule: Sendable {
         let epsilon = max(1e-12, time.ulp * 2)
         let sinceBoundary: TimeInterval
         if elapsed <= epsilon || cycleDuration - elapsed <= epsilon {
-            sinceBoundary = pauseBetweenLoops
-        } else if elapsed <= pass + epsilon {
-            sinceBoundary = elapsed
-        } else {
+            let lastSiblingStop = groupMotion?.arrivals.dropLast().last ?? 0
+            sinceBoundary = pauseBetweenLoops > 0 ? pauseBetweenLoops : cycleDuration - lastSiblingStop
+        } else if elapsed > pass + epsilon {
             sinceBoundary = elapsed - pass
+        } else {
+            let previousStop = groupMotion?.arrivals.last { $0 < elapsed - epsilon } ?? 0
+            sinceBoundary = elapsed - previousStop
         }
         return Date(timeIntervalSinceReferenceDate: max(previousGrid, time - sinceBoundary))
     }
@@ -189,8 +203,9 @@ public struct WidgetMarqueeSchedule: Sendable {
         guard duration > 0 else { return Double(copy) }
         let coordinate = cycleCoordinate(at: date)
         let lap = floor(coordinate)
-        let fraction = min(1, (coordinate - lap) * cycleDuration / duration)
-        let lane = (lap + Double(copy) + timing.progress(fraction)).truncatingRemainder(dividingBy: 3)
+        let elapsed = (coordinate - lap) * cycleDuration
+        let progress = groupMotion?.progress(at: elapsed) ?? timing.progress(min(1, elapsed / duration))
+        let lane = (lap + Double(copy) + progress).truncatingRemainder(dividingBy: 3)
         return lane < 0 ? lane + 3 : lane
     }
 
@@ -201,6 +216,11 @@ public struct WidgetMarqueeSchedule: Sendable {
     func elapsedInCycle(at date: Date) -> TimeInterval {
         let coordinate = cycleCoordinate(at: date)
         return (coordinate - floor(coordinate)) * cycleDuration
+    }
+
+    func speedFactor(at date: Date, pass: TimeInterval) -> Double {
+        let elapsed = elapsedInCycle(at: date)
+        return groupMotion?.speedFactor(at: elapsed) ?? timing.speedFactor(min(1, elapsed / pass))
     }
 
     private func cycleCoordinate(at date: Date) -> Double {

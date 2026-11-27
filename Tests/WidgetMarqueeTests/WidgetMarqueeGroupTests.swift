@@ -40,4 +40,26 @@ final class WidgetMarqueeGroupTests: XCTestCase {
         XCTAssertEqual(group.rows[0].liveCycleDuration, group.rows[0].liveTravelDuration)
         XCTAssertGreaterThan(group.rows[1].widgetTravelDuration, group.rows[0].widgetTravelDuration)
     }
+
+    func testOnlyDistinctMovingEasedArrivalsAffectTheSharedCurve() throws {
+        let group = WidgetMarqueeGroup(items: [
+            .init("First train"), .init("First train"), .init("Last train for Kyoto via Nagoya"),
+            .init("Express", timing: .linear), .init("Fits", viewportWidth: 300), .init("Stopped", pointsPerSecond: 0)
+        ], startedAt: start, pointsPerSecond: 40, timing: .easeInOut)
+
+        for (durations, profiles) in [(group.rows.map(\.widgetTravelDuration), group.rows.map(\.widgetMotion)),
+                                      (group.rows.map(\.liveTravelDuration), group.rows.map(\.liveMotion))] {
+            let first = try XCTUnwrap(profiles[0])
+            let duplicate = try XCTUnwrap(profiles[1])
+            let last = try XCTUnwrap(profiles[2])
+            XCTAssertEqual(Array(first.arrivals), [durations[0]])
+            XCTAssertEqual(first.arrivals, duplicate.arrivals)
+            XCTAssertEqual(Array(last.arrivals), [durations[0], durations[2]])
+            XCTAssertTrue(profiles[3...].allSatisfy { $0 == nil })
+        }
+
+        let equal = WidgetMarqueeGroup(["First train", "First train"], startedAt: start,
+                                       pointsPerSecond: 40, timing: .easeInOut)
+        XCTAssertTrue(equal.rows.allSatisfy { $0.liveMotion == nil && $0.widgetMotion == nil })
+    }
 }
