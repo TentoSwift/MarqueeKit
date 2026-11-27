@@ -9,14 +9,12 @@ struct NowPlayingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: NowPlayingAttributes.self) { context in
             NowPlayingCard(state: context.state, activityID: context.activityID)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .activityBackgroundTint(Color(red: 0.12, green: 0.09, blue: 0.14).opacity(0.85))
+                .activityBackgroundTint(.clear)
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.bottom) {
-                    NowPlayingCard(state: context.state, activityID: context.activityID)
+                    NowPlayingCard(state: context.state, activityID: context.activityID, isExpanded: true)
                 }
             } compactLeading: {
                 RecordCover().frame(width: 21, height: 21)
@@ -26,6 +24,8 @@ struct NowPlayingLiveActivity: Widget {
             } minimal: {
                 Image(systemName: "music.note")
             }
+            // The shared card already supplies the content margins.
+            .contentMargins(.all, 0, for: .expanded)
         }
     }
 }
@@ -33,11 +33,15 @@ struct NowPlayingLiveActivity: Widget {
 private struct NowPlayingCard: View {
     let state: NowPlayingAttributes.ContentState
     let activityID: String
+    var isExpanded = false
+
+    private var coverSize: CGFloat { isExpanded ? 44 : 48 }
+    private var controlHeight: CGFloat { isExpanded ? 32 : 44 }
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: isExpanded ? 2 : 5) {
             HStack(spacing: 10) {
-                RecordCover().frame(width: 48, height: 48)
+                RecordCover().frame(width: coverSize, height: coverSize)
                 GeometryReader { area in
                     let group = WidgetMarqueeGroup(
                         [state.track.title, state.track.artist], startedAt: state.titleStartedAt,
@@ -53,32 +57,38 @@ private struct NowPlayingCard: View {
                     .marqueeEdgeFade(length: 8, clearance: 4)
                 }
                 .frame(height: 46)
-                if state.playingFrom == nil {
-                    Image(systemName: "pause.fill").font(.caption).accessibilityHidden(true)
-                } else {
-                    Image(systemName: "waveform")
-                        .foregroundStyle(LinearGradient(colors: [.orange, .pink, .yellow],
-                                                        startPoint: .leading, endPoint: .trailing))
-                        .accessibilityHidden(true)
+                Group {
+                    if state.playingFrom == nil {
+                        Image(systemName: "pause.fill").font(.caption)
+                    } else {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(LinearGradient(colors: [.orange, .pink, .yellow],
+                                                            startPoint: .leading, endPoint: .trailing))
+                    }
                 }
+                .frame(width: 20, alignment: .trailing)
+                .accessibilityHidden(true)
             }
             progress
-            HStack {
+            HStack(spacing: 0) {
                 control(.favorite, state.favorites.contains(state.trackIndex) ? "star.fill" : "star",
-                        "お気に入りを切り替える", size: 17)
-                Spacer()
+                        "お気に入りを切り替える", size: 17, alignment: isExpanded ? .center : .leading)
+                Spacer(minLength: 0)
                 control(.previous, "backward.fill", "前の曲")
-                Spacer()
+                Spacer(minLength: 0)
                 control(.playPause, state.playingFrom == nil ? "play.fill" : "pause.fill",
                         state.playingFrom == nil ? "再生" : "一時停止", size: 26)
-                Spacer()
+                Spacer(minLength: 0)
                 control(.next, "forward.fill", "次の曲")
-                Spacer()
+                Spacer(minLength: 0)
                 Image(systemName: "airpodspro")
                     .font(.body).foregroundStyle(.white.opacity(0.65))
+                    .frame(width: 44, height: controlHeight, alignment: isExpanded ? .center : .trailing)
                     .accessibilityLabel("デモの出力先：イヤフォン")
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .foregroundStyle(.white)
     }
 
@@ -86,7 +96,7 @@ private struct NowPlayingCard: View {
         HStack(spacing: 7) {
             if let start = state.playingFrom {
                 let interval = start...start.addingTimeInterval(state.track.duration)
-                Text(timerInterval: interval, countsDown: false).frame(width: 36, alignment: .leading)
+                Text(timerInterval: interval, countsDown: false).frame(width: 42, alignment: .leading)
                 ProgressView(timerInterval: interval, countsDown: false).labelsHidden()
                 HStack(spacing: 0) {
                     Text("−")
@@ -94,7 +104,7 @@ private struct NowPlayingCard: View {
                 }
                 .frame(width: 42, alignment: .trailing)
             } else {
-                Text(clock(state.pausedAt)).frame(width: 36, alignment: .leading)
+                Text(clock(state.pausedAt)).frame(width: 42, alignment: .leading)
                 ProgressView(value: state.pausedAt, total: state.track.duration)
                 Text("−" + clock(state.track.duration - state.pausedAt))
                     .frame(width: 42, alignment: .trailing)
@@ -111,10 +121,12 @@ private struct NowPlayingCard: View {
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 
-    private func control(_ action: PlayerAction, _ symbol: String, _ label: String, size: CGFloat = 20) -> some View {
+    private func control(_ action: PlayerAction, _ symbol: String, _ label: String,
+                         size: CGFloat = 20, alignment: Alignment = .center) -> some View {
         Button(intent: NowPlayingControl(action, activityID: activityID)) {
             Image(systemName: symbol).font(.system(size: size, weight: .semibold))
-                .frame(minWidth: 32, minHeight: 34)
+                .frame(width: 44, height: controlHeight, alignment: alignment)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: label))

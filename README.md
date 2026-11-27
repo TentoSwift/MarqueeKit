@@ -2,7 +2,9 @@
 
 MarqueeKitはSwiftUIアプリ、ホーム画面Widget、Live Activityで文字列を自動スクロールするSwift Packageです。横送りでは1行を左に、縦送りでは文字を縦1列に並べて上に送ります。表示領域に収まる文章は静止し、長い文章は末尾から先頭に戻って繰り返します。対応環境はiOS 17以降、Swift tools 5.9以降です。
 
-![再生中の曲名とアーティスト名を表示するLive Activity](Documentation/now-playing.png)
+![ロック画面で曲名とアーティスト名が左に流れ、先頭に戻って一緒に再開する様子](Documentation/now-playing.gif)
+
+[録画をダウンロード（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.6.1/now-playing.mp4)
 
 ## インストール
 
@@ -24,9 +26,18 @@ Swift Packageから利用する場合は、`Package.swift` の `dependencies` �
 
 ## Live Activityで再生カードを作る
 
-冒頭の画像は同梱のサンプルをiPhoneシミュレータのロック画面で表示したものです。ロック画面と展開したDynamic Islandには、ジャケット、曲名、アーティスト名、経過時間と残り時間、再生ボタンが並びます。コンパクト表示ではジャケットと再生状態が見えます。[展開したDynamic Islandの表示](Documentation/now-playing-island.png)
+冒頭の録画は同梱のサンプルをiPhoneシミュレータのロック画面に表示したものです。ロック画面と展開したDynamic Islandには、ジャケット、曲名、アーティスト名、経過時間と残り時間、再生ボタンが並びます。カードの内側の余白はどちらも左右16 pt、上下10 ptです。ロック画面の背景色には `.activityBackgroundTint(.clear)` を指定しています。コンパクト表示ではジャケットと再生状態が見えます。[ロック画面](Documentation/now-playing.png) · [展開したDynamic Island](Documentation/now-playing-island.png)
 
-曲名とアーティスト名をそれぞれ `LiveActivityMarquee` に渡します。下の例ではジャケットや右のアイコンを除いた幅を `GeometryReader` で測り、収まる行は静止させます。長い行は平均32 pt/秒で流れ、次の周回が始まるのは両方が先頭に戻ってから2秒後です。[曲名とアーティスト名が流れる録画（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.6.0/now-playing.mp4)
+<details>
+<summary>展開したDynamic Islandの録画を見る</summary>
+
+![展開したDynamic Islandで曲名とアーティスト名が流れる様子](Documentation/now-playing-island.gif)
+
+[録画をダウンロード（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.6.1/now-playing-island.mp4)
+
+</details>
+
+曲名とアーティスト名をそれぞれ `LiveActivityMarquee` に渡します。下の例ではジャケットや右のアイコンを除いた幅を `GeometryReader` で測り、収まる行は静止させます。長い行は平均32 pt/秒で流れ、次の周回が始まるのは両方が先頭に戻ってから2秒後です。
 
 ```swift
 import MarqueeKit
