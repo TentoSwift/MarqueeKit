@@ -14,13 +14,17 @@ final class LiveActivityCruiseTests: XCTestCase {
         let width: CGFloat = 72
         let height = max(23, ceil(font.lineHeight))
         let period: CGFloat = 128
-        let ruler = Font(WidgetMarqueePlayback.font(base, period: period, travelDuration: 4, pause: 4, timing: .linear))
+        let ruler = Font(WidgetMarqueePlayback.font(base, period: period, travelDuration: 4, pause: 4, timing: .linear,
+                                                    spansTwoLaps: true))
         for line in ["HIIH HIIH HIIH 文字の輪郭", "HIIH 🟩 HIIH 東京 🟦"] {
             let marquee = LiveActivityMarquee(line, startedAt: .distantPast, horizontalFont: font)
-            // At 32 pt/s these timestamps land on integral display pixels at 3×.
-            for (stamp, distance): (String, CGFloat) in [("0:00.50", 16), ("0:01.25", 40)] {
-                let moving = marquee.horizontalStrip(line, clock: Text(verbatim: stamp), units: 1, ruler: ruler,
-                                                     prefixPeriods: 1, period: period, width: width, inset: 0)
+            // Deliberately separate the timestamps by half a second. At 32 pt/s
+            // two painted samples would be visibly distinct. The two advances
+            // must place a single copy exactly at the midpoint (16 or 40 pt).
+            for (early, late, distance): (String, String, CGFloat) in [("0:00.25", "0:00.75", 16), ("0:01.00", "0:01.50", 40)] {
+                let clock = LiveActivityMarquee.clockPrefix(Text(verbatim: early), Text(verbatim: late), base: base)
+                let moving = marquee.horizontalStrip(line, clock: clock, units: 2, ruler: ruler,
+                                                     prefixPeriods: 2, period: period, width: width, inset: 0)
                 let reference = Text(verbatim: line).font(Font(font)).lineLimit(1)
                     .frame(width: 3 * period + 2, height: height, alignment: .leading)
                     .offset(x: -distance)
@@ -35,7 +39,7 @@ final class LiveActivityCruiseTests: XCTestCase {
                     referenceInk += Int(expected[index])
                 }
                 XCTAssertGreaterThan(referenceInk, 0)
-                XCTAssertLessThan(Double(difference) / Double(max(1, referenceInk)), 0.03, "\(line), \(stamp)")
+                XCTAssertLessThan(Double(difference) / Double(max(1, referenceInk)), 0.03, "\(line), \(early)–\(late)")
             }
         }
     }

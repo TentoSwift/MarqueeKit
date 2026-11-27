@@ -155,24 +155,28 @@ public struct LiveActivityMarquee: View {
         let scheduledPeriod = axis == .vertical
             ? contentLength + (repeatSpacing ?? WidgetMarqueeMetrics.gap)
             : WidgetMarqueeMetrics.liveRepeatWidth(for: line, font: horizontalFont, repeatSpacing: repeatSpacing)
+        let canPairClocks = supportsPairedClock(for: line)
+        let baseTravel = pointsPerSecond.map { Double(scheduledPeriod / $0) } ?? 10
         let usesPlayback = axis == .vertical || sharedCycle != nil || repeatSpacing != nil || ramps != nil
             || timing != .linear || pauseBetweenLoops > 0 || line.utf8.count > Self.shortLineBytes
+            || (canPairClocks && baseTravel <= WidgetMarqueePlayback.maxCentisecondLap && Self.playbackFace != nil)
         let measuresStrip = axis == .horizontal && (usesPlayback || pointsPerSecond == nil)
         let period = measuresStrip ? renderedRepeatWidth(for: line, fallback: scheduledPeriod) : scheduledPeriod
         // An inset wider than the loop gap exposes the end of the preceding copy.
         let gap = repeatSpacing ?? (scheduledPeriod - contentLength)
         let previous = inset > gap ? 1 : 0
         if usesPlayback {
-            let baseTravel = pointsPerSecond.map { Double(scheduledPeriod / $0) } ?? 10
             let motion = sharedCycle?.motion ?? ramps.flatMap {
                 WidgetMarqueeGroup.Motion.custom($0, baseTravel: baseTravel, fixedDuration: pointsPerSecond == nil)
             }
             let travel = sharedCycle?.travel ?? motion?.duration ?? baseTravel
             if travel.isFinite, travel > 0, let face = Self.playbackFace {
                 let base = CTFontCreateWithName(face as CFString, 14, nil)
+                let cycle = sharedCycle?.duration ?? (travel + pauseBetweenLoops)
+                let paired = canPairClocks && (2 * cycle).isFinite
                 let ruler = Font(WidgetMarqueePlayback.font(
                     base, period: period, travelDuration: travel, pause: pauseBetweenLoops,
-                    timing: timing, cycleDuration: sharedCycle?.duration, groupMotion: motion
+                    timing: timing, cycleDuration: sharedCycle?.duration, groupMotion: motion, spansTwoLaps: paired
                 ))
                 if axis == .vertical {
                     if let tile = LiveActivityVerticalStrip.unit(for: line, repeatSpacing: repeatSpacing) {
@@ -186,7 +190,9 @@ public struct LiveActivityMarquee: View {
                         stationary(line, length: length, inset: inset)
                     }
                 } else {
-                    horizontalStrip(line, clock: clock(startingAt: startedAt), units: 1 + previous, ruler: ruler, prefixPeriods: 1 + previous,
+                    let prefixPeriods = (paired ? 2 : 1) + previous
+                    let timer = paired ? pairedClock(base: base) : clock(startingAt: startedAt)
+                    horizontalStrip(line, clock: timer, units: prefixPeriods, ruler: ruler, prefixPeriods: prefixPeriods,
                                     period: period, width: length, inset: inset)
                 }
             } else {
@@ -314,12 +320,34 @@ public struct LiveActivityMarquee: View {
         return Text(date, style: .timer)
     }
 
+    private func supportsPairedClock(for line: String) -> Bool {
+        #if canImport(SwiftUICore)
+        if #available(iOS 18.0, *) {
+            // The paired prefix requires an extra repeat in the archived view.
+            return axis == .horizontal && line.utf8.count <= Self.shortLineBytes
+        }
+        #endif
+        return false
+    }
+
+    private func pairedClock(base: CTFont) -> Text {
+        let early = clock(startingAt: startedAt.addingTimeInterval(-0.0025))
+        let late = clock(startingAt: startedAt.addingTimeInterval(0.0025))
+        return Self.clockPrefix(early, late, base: base)
+    }
+
+    static func clockPrefix(_ first: Text, _ second: Text, base: CTFont) -> Text {
+        // The colon has zero advance and no ink. Its distinct size separates
+        // the two font runs so shaping one stopwatch cannot consume the other.
+        let separator = Text(verbatim: ":").font(Font(CTFontCreateCopyWithAttributes(base, 1, nil, nil)))
+        return Text("\(first)\(separator)\(second)")
+    }
+
     func horizontalStrip(
         _ line: String, clock: Text, units: Int, endsWithGap: Bool = false, ruler: Font, prefixPeriods: Int,
         period: CGFloat, width: CGFloat, inset: CGFloat
     ) -> some View {
-        // Advance the entire strip at one timestamp. Blending different positions
-        // gives moving glyphs a second edge, even when the two clocks are close.
+        // The prefix sets one position for the whole strip. Draw every glyph once.
         clockStrip(clock, ruler: ruler, strip: horizontalContent(line, units: units, endsWithGap: endsWithGap),
                    prefixPeriods: prefixPeriods, period: period, width: width, inset: inset)
     }
