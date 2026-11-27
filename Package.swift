@@ -8,7 +8,13 @@ let package = Package(
         .library(name: "WidgetMarquee", targets: ["WidgetMarquee"])
     ],
     targets: [
-        .target(name: "WidgetMarquee"),
+        .target(
+            name: "WidgetMarquee",
+            resources: [
+                .copy("Resources/WidgetMarqueeStopwatch.ttf"),
+                .copy("Resources/WidgetMarqueeTimerGate.ttf")
+            ]
+        ),
         .testTarget(name: "WidgetMarqueeTests", dependencies: ["WidgetMarquee"])
     ]
 )
