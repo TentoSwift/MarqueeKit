@@ -19,10 +19,9 @@ final class LiveActivityHeadPositionTests: XCTestCase {
             let period = marquee.renderedRepeatWidth(for: label, fallback: nominal)
             let prefix = (gap ?? nominal - WidgetMarqueeMetrics.textWidth(for: label, font: font)) < inset ? 2 : 1
             let ruler = Font(WidgetMarqueePlayback.font(base, period: period, travelDuration: 4, pause: 2, timing: .linear))
-            let strip = marquee.horizontalContent(label, units: prefix)
             func image(_ stamp: String) throws -> [UInt8] {
-                let view = marquee.clockStrip(Text(verbatim: stamp), ruler: ruler, strip: strip,
-                                                prefixPeriods: prefix, period: period, width: 48, inset: inset)
+                let view = marquee.horizontalStrip(label, clock: Text(verbatim: stamp), units: prefix, ruler: ruler,
+                                                   prefixPeriods: prefix, period: period, width: 48, inset: inset)
                     .foregroundStyle(.white).background(.black).environment(\.displayScale, 3)
                 let renderer = ImageRenderer(content: view)
                 renderer.scale = 3

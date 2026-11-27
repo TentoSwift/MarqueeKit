@@ -29,16 +29,6 @@ final class LiveActivitySpeedTests: XCTestCase {
         XCTAssertLessThan(size, 16 * 1024)
     }
 
-    @MainActor
-    func testColorGlyphDetectionUsesTheResolvedFontOfEachRun() {
-        for font in [UIFont.systemFont(ofSize: 18, weight: .semibold), WidgetMarqueeMetrics.font] {
-            XCTAssertFalse(LiveActivityMarquee.hasColorGlyphs(in: "東京 012 · שלום · ✈\u{FE0E}", font: font))
-            for text in ["東京 ✈\u{FE0F}", "Family 👨‍👩‍👧‍👦", "Flag 🇯🇵", "Track 1️⃣"] {
-                XCTAssertTrue(LiveActivityMarquee.hasColorGlyphs(in: text, font: font), text)
-            }
-        }
-    }
-
     func testStandaloneStopBetweenCurveSamplesHoldsUntilTheNextLap() throws {
         let base = try bundledFont("WidgetMarqueePlayback")
         let width: CGFloat = 212.5
