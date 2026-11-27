@@ -8,6 +8,16 @@ final class LiveRepeatSpacingTests: XCTestCase {
     private let spacings: [CGFloat] = [0, 0.5, 24.5, 64]
 
     @MainActor
+    func testRestartCopiesShareOneClockAndKeepTheirSpacing() throws {
+        let marquee = LiveActivityMarquee("手順", startedAt: .distantPast, pointsPerSecond: 42, repeatSpacing: 80)
+        let (strip, clocks) = marquee.horizontalCopies("手順", units: 1, endsWithGap: false)
+        XCTAssertEqual(clocks, 1)
+        let message = Text(verbatim: "手順").font(Font(WidgetMarqueeMetrics.font))
+        XCTAssertEqual(try renderedWidth(of: strip) - renderedWidth(of: Text("\(message)\(message)")),
+                       80, accuracy: 0.5)
+    }
+
+    @MainActor
     func testHorizontalSpacerAddsTheRequestedRenderedWidth() throws {
         try registerSpacingFont()
         let letter = Text(verbatim: "I").font(.system(size: 16, design: .monospaced))

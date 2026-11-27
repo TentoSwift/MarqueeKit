@@ -308,10 +308,10 @@ public struct LiveActivityMarquee: View {
         _ line: String, units: Int, endsWithGap: Bool = false, ruler: Font, prefixPeriods: Int,
         period: CGFloat, width: CGFloat, inset: CGFloat, showsHours: Bool = true
     ) -> some View {
-        let strip = endsWithGap ? repeatedLine(line, units: units, endsWithGap: true) : messageStrip(line)
+        let (strip, copies) = horizontalCopies(line, units: units, endsWithGap: endsWithGap)
         let row = { (date: Date) in
             let timer = clock(startingAt: date, showsHours: showsHours)
-            return anchoredCopies(strip, clock: timer, ruler: ruler, count: endsWithGap ? 1 : units + 1,
+            return anchoredCopies(strip, clock: timer, ruler: ruler, count: copies,
                                   prefixPeriods: prefixPeriods, period: period, width: width, inset: inset)
         }
         #if canImport(SwiftUICore)
@@ -326,6 +326,19 @@ public struct LiveActivityMarquee: View {
         #else
         row(startedAt)
         #endif
+    }
+
+    func horizontalCopies(_ line: String, units: Int, endsWithGap: Bool) -> (Text, Int) {
+        if let spacing = repeatSpacing, !endsWithGap {
+            // At wraparound the visible head switches copies. Keep those copies
+            // in one timer Text so WidgetKit advances them in the same frame.
+            let message = messageStrip(line)
+            let unit = Text("\(message)\(Self.spacer(spacing))")
+            return (Self.joined(Array(repeating: unit, count: units) + [message]), 1)
+        } else {
+            let strip = endsWithGap ? repeatedLine(line, units: units, endsWithGap: true) : messageStrip(line)
+            return (strip, endsWithGap ? 1 : units + 1)
+        }
     }
 
     // WidgetKit can shape a repeated Text with a different pitch than UIKit.

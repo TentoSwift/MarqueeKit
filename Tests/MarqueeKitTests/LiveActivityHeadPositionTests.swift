@@ -48,8 +48,11 @@ final class LiveActivityHeadPositionTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(head, Int(inset * scale) - 1)
         XCTAssertLessThan(head, Int((inset + 5) * scale))
         XCTAssertLessThan(try firstInkColumn(at: "0:00.20"), head - 4)
-        for stamp in ["0:04.00", "0:05.75", "0:06.00"] {
+        for stamp in ["0:04.00", "0:05.75", "0:05.99", "0:06.00", "0:11.99", "0:12.00"] {
             XCTAssertEqual(try firstInkColumn(at: stamp), head, "First glyph moved at \(stamp)")
+        }
+        for stamp in ["0:06.01", "0:12.01"] {
+            XCTAssertEqual(try firstInkColumn(at: stamp), head, accuracy: 2, "Unexpected jump at restart")
         }
     }
 }
