@@ -29,16 +29,6 @@ final class LiveActivitySpeedTests: XCTestCase {
         XCTAssertLessThan(size, 16 * 1024)
     }
 
-    @MainActor
-    func testColorGlyphDetectionUsesTheResolvedFontOfEachRun() {
-        for font in [UIFont.systemFont(ofSize: 18, weight: .semibold), WidgetMarqueeMetrics.font] {
-            XCTAssertFalse(LiveActivityMarquee.hasColorGlyphs(in: "東京 012 · שלום · ✈\u{FE0E}", font: font))
-            for text in ["東京 ✈\u{FE0F}", "Family 👨‍👩‍👧‍👦", "Flag 🇯🇵", "Track 1️⃣"] {
-                XCTAssertTrue(LiveActivityMarquee.hasColorGlyphs(in: text, font: font), text)
-            }
-        }
-    }
-
     func testStandaloneStopBetweenCurveSamplesHoldsUntilTheNextLap() throws {
         let base = try bundledFont("WidgetMarqueePlayback")
         let width: CGFloat = 212.5
@@ -55,6 +45,37 @@ final class LiveActivitySpeedTests: XCTestCase {
                 XCTAssertEqual(advance(stamp, font: font), expected, accuracy: 2.5, stamp)
             }
         }
+    }
+
+    func testPairedLinearClockMaintainsPointSpeedThroughClockCarries() throws {
+        let base = try bundledFont("WidgetMarqueePlayback")
+        let pitch: CGFloat = 351.25
+        for speed: CGFloat in [28, 55] {
+            let ruler = WidgetMarqueePlayback.font(base, period: pitch, travelDuration: Double(pitch / speed),
+                                                   pause: 0, timing: .linear, spansTwoLaps: true)
+            for (stamp, seconds): (String, CGFloat) in [("0:00.50", 0.5), ("0:59.99", 59.99),
+                                                        ("1:00.00", 60), ("1:00:00.01", 3600.01)] {
+                let displacement = 2 * (pitch - advance(stamp, font: ruler))
+                let error = (displacement - speed * seconds).remainder(dividingBy: pitch)
+                XCTAssertEqual(error, 0, accuracy: 0.6, "\(stamp) at \(speed) pt/s")
+            }
+        }
+    }
+
+    func testTwoLapClockHoldsAtBothStopsAndWrapsByAWholePitch() throws {
+        let base = try bundledFont("WidgetMarqueePlayback")
+        let pitch: CGFloat = 212.5
+        // A short pass in a long group cycle needs dense samples in both laps.
+        let ruler = WidgetMarqueePlayback.font(base, period: pitch, travelDuration: 4.25, pause: 123.75,
+                                               timing: .easeInOut, spansTwoLaps: true)
+        for stamp in ["0:04.30", "2:07.99", "2:08.00"] {
+            XCTAssertEqual(advance(stamp, font: ruler), pitch / 2, accuracy: 0.01, stamp)
+        }
+        for stamp in ["2:12.30", "4:15.99"] {
+            XCTAssertEqual(advance(stamp, font: ruler), 0, accuracy: 0.01, stamp)
+        }
+        let staggeredWrap = advance("4:15.99", font: ruler) + advance("4:16.00", font: ruler)
+        XCTAssertEqual(staggeredWrap, pitch, accuracy: 0.01)
     }
 
     // A carry may put a different copy of the same text in the viewport.

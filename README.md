@@ -2,7 +2,9 @@
 
 MarqueeKitはSwiftUIアプリ、ホーム画面Widget、Live Activityで文字列を自動スクロールするSwift Packageです。横送りでは1行を左に、縦送りでは文字を縦1列に並べて上に送ります。表示領域に収まる文章は静止し、長い文章は末尾から先頭に戻って繰り返します。対応環境はiOS 17以降、Swift tools 5.9以降です。
 
-1.8.0では、Live Activityの横送りが再開する瞬間に文字が1フレームだけ暗くなる問題を修正しました。iPhone Duoでは、展開したDynamic Islandの描画データがOSの上限を超えると、Live Activityが終了する場合があります。
+1.8.0でLive Activityの横送りを再開した瞬間の点滅を修正しました。1.8.1では、一定の速さで流れている文字の輪郭が二重に見える問題を修正しました。iPhone 16 Proのロック画面で曲名とアーティスト名を28 pt/秒と55 pt/秒で流し、どちらの速度でも1.8.0と同程度の滑らかさを確認しました。
+
+iPhone Duoでは、展開したDynamic Islandの描画データがOSの上限を超えると、Live Activityが終了する場合があります。
 
 ![ロック画面で曲名とアーティスト名が左に流れ、先頭に戻って一緒に再開する様子](Documentation/now-playing.gif)
 
@@ -10,12 +12,12 @@ MarqueeKitはSwiftUIアプリ、ホーム画面Widget、Live Activityで文字�
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/MarqueeKit.git` を指定し、**Up to Next Major Version** の開始バージョンに `1.8.0` を入力します。マーキーを表示するアプリやWidget Extensionのターゲットに製品 `MarqueeKit` を追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/MarqueeKit.git` を指定し、**Up to Next Major Version** の開始バージョンに `1.8.1` を入力します。マーキーを表示するアプリやWidget Extensionのターゲットに製品 `MarqueeKit` を追加します。
 
 Swift Packageから利用する場合は、`Package.swift` の `dependencies` にリポジトリを追加します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/MarqueeKit.git", from: "1.8.0")
+.package(url: "https://github.com/TentoSwift/MarqueeKit.git", from: "1.8.1")
 ```
 
 利用するターゲットの `dependencies` には製品を指定します。
@@ -109,7 +111,7 @@ iPhone 17 Proシミュレータ（iOS 27.2）で日本語の文章を横に送�
 
 ![ロック画面のLive Activityで日本語の文章が左に流れて一周する様子](Documentation/live-activity-smooth.gif)
 
-AppleのFrameworks Engineerはタイマーとカスタムフォントを使うアニメーションをサポート対象外としており、電池や性能への影響を指摘しています。更新頻度はOSと表示状態に左右されます。加減速、待機、複数行の同期を指定したLive Activityでは、一周を4,096段階で表します。文章や待ち時間が非常に長いと、文字送りの刻みが目立つことがあります。同期した行の加減速は共通の時刻で移動距離を補間するため、画面上で各行が止まる時刻には丸めが入ります。[Appleの技術者による説明](https://developer.apple.com/forums/thread/757696)
+AppleのFrameworks Engineerはタイマーとカスタムフォントを使うアニメーションをサポート対象外としており、電池や性能への影響を指摘しています。更新頻度はOSと表示状態に左右されます。1.8.0では、加減速、待機、複数行の同期を指定したLive Activityの一周を4,096段階で表します。1.8.1では、iOS 18以降で短い文章を横に送るとき、2つの時計で2周分を4,096段階に分けて文字の位置を決めます。文字列を描く位置はフレームごとに1か所です。文章や待ち時間が非常に長いと、文字送りの刻みが目立つことがあります。同期した行の加減速は共通の時刻で移動距離を補間するため、画面上で各行が止まる時刻には丸めが入ります。[Appleの技術者による説明](https://developer.apple.com/forums/thread/757696)
 
 ### 1行表示のサンプルを実行する
 

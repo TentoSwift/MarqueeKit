@@ -30,6 +30,11 @@ GROUP_SAMPLES = [
     *range(32), *range(32, 64, 4), *range(64, 128, 8),
     *range(128, 256, 16), *range(256, PHASE_COUNT + 1, 32),
 ]
+# The paired clock covers two laps. Mirror the dense start knots so that both
+# laps can stop exactly, even when another row has a much longer travel time.
+GROUP_SAMPLES = sorted(set(GROUP_SAMPLES) | {
+    PHASE_COUNT // 2 + phase for phase in GROUP_SAMPLES if phase < 256
+})
 GROUP_AXES = [f"P{index:03d}" for index in range(len(GROUP_SAMPLES))]
 GLYPH_ORDER = [
     ".notdef", "blank", "colon", "decimal", *DIGITS, *POSITIONAL_DIGITS,
