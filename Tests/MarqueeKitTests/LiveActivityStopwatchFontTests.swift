@@ -1,7 +1,7 @@
 import CoreText
 import SwiftUI
 import XCTest
-@testable import WidgetMarquee
+@testable import MarqueeKit
 
 final class LiveActivityStopwatchFontTests: XCTestCase {
     private let period: CGFloat = 240

@@ -45,7 +45,7 @@ public struct LiveActivityMarquee: View {
         // A package may be embedded in the extension or in the containing app.
         // Missing resources should leave a readable line.
         for host in hosts {
-            let packageURL = host.url(forResource: "WidgetMarquee_WidgetMarquee", withExtension: "bundle")
+            let packageURL = host.url(forResource: "MarqueeKit_MarqueeKit", withExtension: "bundle")
             let package = packageURL.flatMap(Bundle.init(url:))
             if let url = package?.url(forResource: resourceName, withExtension: "ttf")
                 ?? host.url(forResource: resourceName, withExtension: "ttf") {

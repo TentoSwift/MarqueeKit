@@ -37,7 +37,7 @@ GLYPH_ORDER = [
     ".notdef", "blank", "colon", "decimal", *DIGITS, *POSITIONAL_DIGITS,
     *TOKENS, *NIBBLES, *ACCUMULATORS, *ADD_BITS,
 ]
-DEFAULT_PATH = Path(__file__).resolve().parents[1] / "Sources/WidgetMarquee/Resources/WidgetMarqueePlayback.ttf"
+DEFAULT_PATH = Path(__file__).resolve().parents[1] / "Sources/MarqueeKit/Resources/WidgetMarqueePlayback.ttf"
 
 
 def glyph_class(name, glyphs):

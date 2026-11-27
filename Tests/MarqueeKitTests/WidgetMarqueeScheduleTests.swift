@@ -1,7 +1,7 @@
 import Foundation
 import WidgetKit
 import XCTest
-@testable import WidgetMarquee
+@testable import MarqueeKit
 
 final class WidgetMarqueeScheduleTests: XCTestCase {
     private struct ReplyEntry: TimelineEntry {

@@ -1,7 +1,7 @@
 import ActivityKit
 import SwiftUI
 import WidgetKit
-import WidgetMarquee
+import MarqueeKit
 
 // Add this widget to the extension's existing @main WidgetBundle.
 struct MarqueeLiveActivity: Widget {

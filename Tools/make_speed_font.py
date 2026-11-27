@@ -109,7 +109,7 @@ def main():
     setup_variable_advances(builder, glyphs)
     builder.font["head"].created = builder.font["head"].modified = 3850000000
     builder.font.recalcTimestamp = False
-    resources = Path(__file__).resolve().parents[1] / "Sources" / "WidgetMarquee" / "Resources"
+    resources = Path(__file__).resolve().parents[1] / "Sources" / "MarqueeKit" / "Resources"
     builder.save(resources / "WidgetMarqueeSpeed.ttf")
 
 

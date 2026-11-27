@@ -1,7 +1,7 @@
 import CoreText
 import SwiftUI
 import XCTest
-@testable import WidgetMarquee
+@testable import MarqueeKit
 
 final class LiveActivitySpeedTests: XCTestCase {
     private func bundledFont(_ name: String) throws -> CTFont {

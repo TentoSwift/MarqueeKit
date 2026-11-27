@@ -1,7 +1,7 @@
 import Foundation
 import WidgetKit
 import XCTest
-import WidgetMarquee
+import MarqueeKit
 
 final class WidgetMarqueeEntryTests: XCTestCase {
     private let start = Date(timeIntervalSinceReferenceDate: 21.75)

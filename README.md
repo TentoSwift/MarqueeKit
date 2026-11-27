@@ -1,4 +1,4 @@
-# WidgetMarquee
+# MarqueeKit
 
 iOSアプリ、ホーム画面Widget、Live Activityで、1行に収まらない文字列を左に送り、末尾から先頭に戻って繰り返すSwift Packageです。好きな `String` を渡すと、その文章の長さに合わせて表示位置を決めます。iOS 17以降、Swift tools 5.9以降に対応しています。
 
@@ -6,13 +6,21 @@ iOSアプリ、ホーム画面Widget、Live Activityで、1行に収まらない
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.4.3` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/MarqueeKit.git` を指定し、バージョン `1.5.0` 以降を選びます。製品 `MarqueeKit` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
 
 `Package.swift` から追加する場合は、`dependencies` に次の行を指定します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.4.3")
+.package(url: "https://github.com/TentoSwift/MarqueeKit.git", from: "1.5.0")
 ```
+
+利用するターゲットの `dependencies` にも製品を追加します。
+
+```swift
+.product(name: "MarqueeKit", package: "MarqueeKit")
+```
+
+1.5.0でパッケージ名とリポジトリ名を `WidgetMarquee` から `MarqueeKit` に変更しました。既存プロジェクトを移行するには、依存先URLと製品の指定を上記に合わせ、ソースのインポートを `import MarqueeKit` に変更します。`WidgetMarquee(text)` や `LiveActivityMarquee(text, startedAt:)` は引き続き同じ名前で使えます。従来の `import WidgetMarquee` を使うターゲットには、互換用の製品 `WidgetMarquee` を指定できます。
 
 ## SwiftUIアプリで使う
 
@@ -20,7 +28,7 @@ Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoS
 
 ```swift
 import SwiftUI
-import WidgetMarquee
+import MarqueeKit
 
 struct MessageView: View {
     let text: String
@@ -47,13 +55,13 @@ LiveActivityMarquee(text, startedAt: startedAt, pointsPerSecond: 40,
                     timing: .easeInOut, pauseBetweenLoops: 2)
 ```
 
-iOS 27.2シミュレータのLive Activityでは、同じ文章に30、60 pt/秒を指定して、約30、60 pt/秒で移動したことを確認しました。90 pt/秒・2秒待機の設定では、等速の行は約5.7秒で移動し、約2秒静止しました。緩急を付けた行は同じ周期で、中央で約135 pt/秒まで加速しました。[加減速と2秒待機の録画（MP4）](https://github.com/TentoSwift/WidgetMarquee/releases/download/1.3.0/live-activity-ease-and-pause.mp4)
+iOS 27.2シミュレータのLive Activityでは、同じ文章に30、60 pt/秒を指定して、約30、60 pt/秒で移動したことを確認しました。90 pt/秒・2秒待機の設定では、等速の行は約5.7秒で移動し、約2秒静止しました。緩急を付けた行は同じ周期で、中央で約135 pt/秒まで加速しました。[加減速と2秒待機の録画（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.3.0/live-activity-ease-and-pause.mp4)
 
 各引数は個別に省略できます。既定は等速（`.linear`）で、周回の待ち時間は0秒です。速度を省略するとLive Activityは10秒で一周し、SwiftUIアプリとホーム画面Widgetは文章の長さに応じた従来の周期を使います。たとえばLive Activityに `pauseBetweenLoops: 2` だけを渡すと、10秒かけて移動して2秒待ちます。速度0、負の速度、非有限の速度では文章が静止します。負の待ち時間や非有限の待ち時間は0秒として扱います。
 
 ## 複数の行が終わってから一緒に再開する
 
-`WidgetMarqueeGroup` に同時に再開したい文章をまとめます。各行は自分の速度で一周し、先に終わった行は先頭位置で待ちます。最後の行が戻った時点から `pauseBetweenLoops` 秒後に全行が再開します。待ち時間が0なら最後の行が戻った時点で再開します。[長さの違う2行を同期させた録画（MP4）](https://github.com/TentoSwift/WidgetMarquee/releases/download/1.4.0/synchronized-marquees.mp4)
+`WidgetMarqueeGroup` に同時に再開したい文章をまとめます。各行は自分の速度で一周し、先に終わった行は先頭位置で待ちます。最後の行が戻った時点から `pauseBetweenLoops` 秒後に全行が再開します。待ち時間が0なら最後の行が戻った時点で再開します。[長さの違う2行を同期させた録画（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.4.0/synchronized-marquees.mp4)
 
 ```swift
 let group = WidgetMarqueeGroup(
@@ -68,7 +76,7 @@ VStack(alignment: .leading) {
 
 SwiftUIアプリでは同じ `group.rows` を `WidgetMarquee(row)` に渡します。`startedAt` にはアプリの状態に保存した開始日時、またはLive Activityの開始属性を使い、ビューを描き直しても同じ日時を渡してください。別々に周回させる場合は、従来どおり文章を各ビューに直接渡します。
 
-長さの異なる2行に同じ `pointsPerSecond` と `.easeInOut` を指定すると、一緒に加速して同じ巡航速度に達します。その後は各行が自分の終点に近づいたときだけ減速します。短い行が先頭で待っている間も、長い行はそのまま進みます。`pointsPerSecond` は一周の移動中の平均速度なので、加減速のある行の巡航速度は指定値より少し速くなります。`.linear` では指定した速度のまま一周します。[短い行の停止前後を収めた録画（MP4）](https://github.com/TentoSwift/WidgetMarquee/releases/download/1.4.2/independent-marquee-stops.mp4)
+長さの異なる2行に同じ `pointsPerSecond` と `.easeInOut` を指定すると、一緒に加速して同じ巡航速度に達します。その後は各行が自分の終点に近づいたときだけ減速します。短い行が先頭で待っている間も、長い行はそのまま進みます。`pointsPerSecond` は一周の移動中の平均速度なので、加減速のある行の巡航速度は指定値より少し速くなります。`.linear` では指定した速度のまま一周します。[短い行の停止前後を収めた録画（MP4）](https://github.com/TentoSwift/MarqueeKit/releases/download/1.4.2/independent-marquee-stops.mp4)
 
 表示幅に収まる行がある場合は、`viewportWidth` にラベルや余白を除いた本文の幅を渡してください。グループはその行を加減速と待ち時間の計算から除外します。行ごとに速度や表示幅が異なる場合は `items:` を使えます。速度0の行もほかの行を待たせません。
 
@@ -126,7 +134,7 @@ WidgetMarquee(entry)
 1.4.3では、文字送りに使うフォントを小さくしました。同期した2行を表示すると、Dynamic Island用の描画データがサイズ上限を超え、開始直後にLive Activityが終了することがあったためです。APIと呼び出し方はこれまでと同じです。
 
 ```swift
-import WidgetMarquee
+import MarqueeKit
 
 // ActivityConfiguration の Lock Screen ビューまたは DynamicIslandExpandedRegion 内
 LiveActivityMarquee(context.state.text, startedAt: context.attributes.startedAt)

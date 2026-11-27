@@ -1,5 +1,5 @@
 import XCTest
-@testable import WidgetMarquee
+@testable import MarqueeKit
 
 final class WidgetMarqueeGroupTests: XCTestCase {
     private let start = Date(timeIntervalSinceReferenceDate: 123.75)

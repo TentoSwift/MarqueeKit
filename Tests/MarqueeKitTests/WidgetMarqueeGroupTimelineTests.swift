@@ -1,7 +1,7 @@
 import SwiftUI
 import WidgetKit
 import XCTest
-@testable import WidgetMarquee
+@testable import MarqueeKit
 
 final class WidgetMarqueeGroupTimelineTests: XCTestCase {
     private let origin = Date(timeIntervalSinceReferenceDate: 25.375)

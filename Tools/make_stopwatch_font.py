@@ -48,7 +48,7 @@ def main():
     addOpenTypeFeaturesFromString(builder.font, "\n".join(rules))
     builder.font["head"].created = builder.font["head"].modified = 3850000000
     builder.font.recalcTimestamp = False
-    resources = Path(__file__).resolve().parents[1] / "Sources" / "WidgetMarquee" / "Resources"
+    resources = Path(__file__).resolve().parents[1] / "Sources" / "MarqueeKit" / "Resources"
     builder.save(resources / "WidgetMarqueeStopwatch.ttf")
 
 

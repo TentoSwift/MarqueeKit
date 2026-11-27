@@ -2,14 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "WidgetMarquee",
+    name: "MarqueeKit",
     platforms: [.iOS(.v17)],
     products: [
+        .library(name: "MarqueeKit", targets: ["MarqueeKit"]),
         .library(name: "WidgetMarquee", targets: ["WidgetMarquee"])
     ],
     targets: [
         .target(
-            name: "WidgetMarquee",
+            name: "MarqueeKit",
             resources: [
                 .copy("Resources/WidgetMarqueeStopwatch.ttf"),
                 .copy("Resources/WidgetMarqueeSpeed.ttf"),
@@ -17,6 +18,7 @@ let package = Package(
                 .copy("Resources/WidgetMarqueeTimerGate.ttf")
             ]
         ),
-        .testTarget(name: "WidgetMarqueeTests", dependencies: ["WidgetMarquee"])
+        .target(name: "WidgetMarquee", dependencies: ["MarqueeKit"]),
+        .testTarget(name: "MarqueeKitTests", dependencies: ["MarqueeKit"])
     ]
 )

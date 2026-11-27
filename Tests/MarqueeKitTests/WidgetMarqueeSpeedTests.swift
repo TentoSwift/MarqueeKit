@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import WidgetKit
 import XCTest
-@testable import WidgetMarquee
+@testable import MarqueeKit
 
 final class WidgetMarqueeSpeedTests: XCTestCase {
     private let text = "京都発\n🚄 東京行き 01 / 02 / 03"

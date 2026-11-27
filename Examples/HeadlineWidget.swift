@@ -1,7 +1,7 @@
 import AppIntents
 import SwiftUI
 import WidgetKit
-import WidgetMarquee
+import MarqueeKit
 
 private let sampleHeadline = "START  ·  東京  →  名古屋  →  京都  →  大阪  →  広島  →  博多  ·  END"
 
