@@ -30,10 +30,10 @@ public struct WidgetMarqueeEntry: TimelineEntry, Sendable {
     /// Creates an entry with the supplied travel speed, timing, and loop pause.
     public init(
         _ text: String, date: Date = .now, pointsPerSecond: CGFloat? = nil,
-        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal
     ) {
         let schedule = WidgetMarqueeSchedule(
-            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops
+            for: text, pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops, axis: axis
         )
         self.init(text, date: date, schedule: schedule)
     }

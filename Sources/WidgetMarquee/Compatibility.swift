@@ -1,6 +1,7 @@
 import MarqueeKit
 
 // Source compatibility for clients that still use the original product and import.
+public typealias MarqueeAxis = MarqueeKit.MarqueeAxis
 public typealias WidgetMarquee = MarqueeKit.WidgetMarquee
 public typealias LiveActivityMarquee = MarqueeKit.LiveActivityMarquee
 public typealias WidgetMarqueeEntry = MarqueeKit.WidgetMarqueeEntry

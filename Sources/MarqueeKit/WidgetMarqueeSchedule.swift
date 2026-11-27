@@ -6,6 +6,9 @@ import WidgetKit
 /// The default 12-step pass takes 24 seconds when WidgetKit presents each entry.
 /// WidgetKit may combine or skip entries and may delay a requested reload.
 public struct WidgetMarqueeSchedule: Sendable {
+    /// The scrolling direction used to measure the text and draw this schedule.
+    public let axis: MarqueeAxis
+
     /// Base interval between scheduled positions in seconds. A pause can add stop and restart entries.
     public let secondsPerStep: TimeInterval
 
@@ -32,8 +35,10 @@ public struct WidgetMarqueeSchedule: Sendable {
     }
 
     /// Creates a two-second schedule with the supplied timing profile.
-    public init(stepsPerPass: Int = 12, timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0) {
+    public init(stepsPerPass: Int = 12, timing: WidgetMarqueeTiming = .linear,
+                pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal) {
         precondition((2...3_600).contains(stepsPerPass), "stepsPerPass must be between 2 and 3,600")
+        self.axis = axis
         self.stepsPerPass = stepsPerPass
         self.secondsPerStep = 2
         self.timing = timing
@@ -46,27 +51,30 @@ public struct WidgetMarqueeSchedule: Sendable {
     /// Use this schedule with the same text. Nonpositive and nonfinite speeds keep the line stationary.
     public init(
         for text: String, pointsPerSecond: CGFloat? = nil,
-        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal
     ) {
         guard let pointsPerSecond else {
             self = WidgetMarqueeSchedule(
-                stepsPerPass: min(3_600, max(12, text.count / 8)), timing: timing, pauseBetweenLoops: pauseBetweenLoops
+                stepsPerPass: min(3_600, max(12, text.count / 8)), timing: timing,
+                pauseBetweenLoops: pauseBetweenLoops, axis: axis
             )
             return
         }
-        let width = WidgetMarqueeMetrics.repeatWidth(for: WidgetMarqueeMetrics.line(from: text))
-        let duration = pointsPerSecond.isFinite && pointsPerSecond > 0 ? Double(width / pointsPerSecond) : 0
-        self.init(travel: duration, timing: timing, pause: pauseBetweenLoops)
+        let line = WidgetMarqueeMetrics.line(from: text)
+        let period = WidgetMarqueeMetrics.contentLength(for: line, axis: axis) + WidgetMarqueeMetrics.gap
+        let duration = pointsPerSecond.isFinite && pointsPerSecond > 0 ? Double(period / pointsPerSecond) : 0
+        self.init(travel: duration, timing: timing, pause: pauseBetweenLoops, axis: axis)
     }
 
     init(_ row: WidgetMarqueeGroup.Row) {
         self.init(travel: row.widgetTravelDuration, timing: row.timing,
-                  pause: row.widgetCycleDuration - row.widgetTravelDuration)
+                  pause: row.widgetCycleDuration - row.widgetTravelDuration, axis: row.axis)
         groupCycle = (row.startedAt, row.widgetCycleDuration)
         groupMotion = row.widgetMotion
     }
 
-    private init(travel duration: TimeInterval, timing: WidgetMarqueeTiming, pause: TimeInterval) {
+    private init(travel duration: TimeInterval, timing: WidgetMarqueeTiming, pause: TimeInterval, axis: MarqueeAxis) {
+        self.axis = axis
         self.timing = timing
         self.pauseBetweenLoops = Self.validPause(pause)
         guard duration.isFinite, duration > 0 else {

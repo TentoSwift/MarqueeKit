@@ -4,7 +4,7 @@ import UIKit
 
 private final class LiveActivityMarqueeResources {}
 
-/// A one-line marquee for a Live Activity's Lock Screen or expanded Dynamic Island.
+/// A horizontal line or upright vertical column for a Live Activity’s Lock Screen or expanded Dynamic Island.
 ///
 /// Keep `startedAt` stable across content updates. A pass takes ten seconds by
 /// default. Supply `pointsPerSecond` to keep the speed fixed across messages of
@@ -12,12 +12,14 @@ private final class LiveActivityMarqueeResources {}
 /// once per second.
 public struct LiveActivityMarquee: View {
     private let text: String
+    private let axis: MarqueeAxis
     private let startedAt: Date
     private let pointsPerSecond: CGFloat?
     private let timing: WidgetMarqueeTiming
     private let pauseBetweenLoops: TimeInterval
     private let sharedCycle: (travel: TimeInterval, duration: TimeInterval, motion: WidgetMarqueeGroup.Motion?)?
 
+    @Environment(\.marqueeEdgeFade) private var edgeFade
     @Environment(\.redactionReasons) private var redactionReasons
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var reducedLuminance
@@ -64,13 +66,15 @@ public struct LiveActivityMarquee: View {
     }
 
     /// Sets the average speed during travel, its timing, and the pause after each pass.
-    /// Omitting the speed gives ten seconds of travel. Nonpositive and nonfinite
-    /// speeds stop the line. A nonpositive or nonfinite pause is treated as zero.
+    /// A vertical marquee shows one upright grapheme per cell and scrolls upward. Give its viewport a height
+    /// with `.frame(height:)`. Omitting the speed gives ten seconds of travel. Nonpositive
+    /// or nonfinite speeds stop the marquee. Nonpositive or nonfinite pauses become zero.
     public init(
         _ text: String, startedAt: Date, pointsPerSecond: CGFloat? = nil,
-        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0
+        timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal
     ) {
         self.text = text
+        self.axis = axis
         self.startedAt = startedAt
         self.pointsPerSecond = pointsPerSecond
         self.timing = timing
@@ -82,6 +86,7 @@ public struct LiveActivityMarquee: View {
     /// and rests at the head of its message until the group starts its next pass.
     public init(_ row: WidgetMarqueeGroup.Row) {
         self.text = row.text
+        self.axis = row.axis
         self.startedAt = row.startedAt
         self.pointsPerSecond = row.pointsPerSecond
         self.timing = row.timing
@@ -91,64 +96,88 @@ public struct LiveActivityMarquee: View {
 
     public var body: some View {
         GeometryReader { viewport in
-            // ActivityKit limits its combined attributes and content state to 4 KB.
-            // Avoid building a wide animated strip for oversized input from other callers.
+            let length = axis == .vertical ? viewport.size.height : viewport.size.width
             if text.utf8.count > 4_096 {
-                stationary(text)
+                stationary(text, length: length)
             } else {
                 let line = WidgetMarqueeMetrics.line(from: text)
-                let lineWidth = WidgetMarqueeMetrics.textWidth(for: line)
-                let width = viewport.size.width
-
-                // A redacted snapshot only needs the stationary text layout.
-                if width > 0, lineWidth > width, !reduceMotion, !reducedLuminance,
-                   redactionReasons.intersection([.placeholder, .privacy]).isEmpty,
-                   pointsPerSecond.map({ $0.isFinite && $0 > 0 }) ?? true {
-                    let unit = line + "    "
-                    let period = WidgetMarqueeMetrics.liveRepeatWidth(for: line)
-                    // Large messages use the two-copy clock to keep the serialized
-                    // view within the WidgetKit host's archive budget.
-                    if sharedCycle != nil || timing != .linear || pauseBetweenLoops > 0 || line.utf8.count > 1_024 {
-                        let travel = sharedCycle?.travel ?? pointsPerSecond.map { Double(period / $0) } ?? 10
-                        if travel.isFinite, travel > 0, let face = Self.playbackFace {
-                            let base = CTFontCreateWithName(face as CFString, 14, nil)
-                            let ruler = Font(WidgetMarqueePlayback.font(
-                                base, period: period, travelDuration: travel, pause: pauseBetweenLoops,
-                                timing: timing, cycleDuration: sharedCycle?.duration, groupMotion: sharedCycle?.motion
-                            ))
-                            let strip = Self.messageStrip(unit + line)
-                            clockStrip(systemClock, ruler: ruler, strip: strip, prefixPeriods: 1, period: period, width: width)
+                let contentLength = WidgetMarqueeMetrics.contentLength(for: line, axis: axis)
+                if length > 0, contentLength > length {
+                    let edges = edgeFade.resolved(in: length)
+                    Group {
+                        if !reduceMotion, !reducedLuminance,
+                           redactionReasons.intersection([.placeholder, .privacy]).isEmpty,
+                           pointsPerSecond.map({ $0.isFinite && $0 > 0 }) ?? true {
+                            moving(line, contentLength: contentLength, length: length, inset: edges.headInset)
                         } else {
-                            stationary(line)
+                            stationary(line, length: length, inset: edges.headInset)
                         }
-                    } else if let pointsPerSecond {
-                        if let face = Self.speedFace {
-                            speedStrip(unit: unit, period: period, width: width, face: face, speed: pointsPerSecond)
-                        } else {
-                            stationary(line)
-                        }
-                    } else {
-                        let strip = Self.messageStrip(unit + line)
-                        // SwiftUICore and the stopwatch format first shipped in the iOS 18 SDK.
-                        #if canImport(SwiftUICore)
-                        if #available(iOS 18.0, *), let face = Self.stopwatchFont {
-                            stopwatchStrip(strip, period: period, width: width, face: face)
-                        } else {
-                            gateOrStationary(strip, line: line, period: period, width: width)
-                        }
-                        #else
-                        gateOrStationary(strip, line: line, period: period, width: width)
-                        #endif
                     }
+                    .modifier(MarqueeEdgeMask(axis: axis, edges: edges))
                 } else {
-                    stationary(line)
+                    stationary(line, length: length)
                 }
             }
         }
-        .frame(height: Self.height)
+        .frame(width: axis == .vertical ? WidgetMarqueeMetrics.columnWidth : nil,
+               height: axis == .horizontal ? Self.height : nil)
         .clipped()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: text))
+    }
+
+    @ViewBuilder
+    private func moving(_ line: String, contentLength: CGFloat, length: CGFloat, inset: CGFloat) -> some View {
+        let unit = line + "    "
+        let period = axis == .vertical ? contentLength + WidgetMarqueeMetrics.gap : WidgetMarqueeMetrics.liveRepeatWidth(for: line)
+        // An inset wider than the loop gap exposes the end of the preceding copy.
+        let previous = inset > period - contentLength ? 1 : 0
+        if axis == .vertical || sharedCycle != nil || timing != .linear || pauseBetweenLoops > 0 || line.utf8.count > 1_024 {
+            let travel = sharedCycle?.travel ?? pointsPerSecond.map { Double(period / $0) } ?? 10
+            if travel.isFinite, travel > 0, let face = Self.playbackFace {
+                let base = CTFontCreateWithName(face as CFString, 14, nil)
+                let ruler = Font(WidgetMarqueePlayback.font(
+                    base, period: period, travelDuration: travel, pause: pauseBetweenLoops,
+                    timing: timing, cycleDuration: sharedCycle?.duration, groupMotion: sharedCycle?.motion
+                ))
+                if axis == .vertical {
+                    if let tile = LiveActivityVerticalStrip.unit(for: line) {
+                        let strip = Self.joined(Array(repeating: tile, count: 2 + previous))
+                        clockStrip(systemClock, ruler: ruler, strip: strip, prefixPeriods: 1 + previous,
+                                   period: period, width: length, inset: inset)
+                            .frame(width: length, height: Self.height)
+                            .rotationEffect(.degrees(90))
+                            .frame(width: WidgetMarqueeMetrics.columnWidth, height: length)
+                    } else {
+                        stationary(line, length: length, inset: inset)
+                    }
+                } else {
+                    let strip = Self.messageStrip(String(repeating: unit, count: 1 + previous) + line)
+                    clockStrip(systemClock, ruler: ruler, strip: strip, prefixPeriods: 1 + previous,
+                               period: period, width: length, inset: inset)
+                }
+            } else {
+                stationary(line, length: length, inset: inset)
+            }
+        } else if let pointsPerSecond {
+            if let face = Self.speedFace {
+                speedStrip(unit: unit, period: period, width: length, face: face, speed: pointsPerSecond,
+                           previous: previous, inset: inset)
+            } else {
+                stationary(line, length: length, inset: inset)
+            }
+        } else {
+            let strip = Self.messageStrip(String(repeating: unit, count: 1 + previous) + line)
+            #if canImport(SwiftUICore)
+            if #available(iOS 18.0, *), let face = Self.stopwatchFont {
+                stopwatchStrip(strip, period: period, width: length, face: face, previous: previous, inset: inset)
+            } else {
+                gateOrStationary(strip, line: line, period: period, width: length, previous: previous, inset: inset)
+            }
+            #else
+            gateOrStationary(strip, line: line, period: period, width: length, previous: previous, inset: inset)
+            #endif
+        }
     }
 
     private static func messageStrip(_ text: String) -> Text {
@@ -171,18 +200,31 @@ public struct LiveActivityMarquee: View {
             runs.append(run.baselineOffset(runs.count.isMultiple(of: 2) ? 0 : 1.0 / 1024))
             start = end
         }
+        return joined(runs)
+    }
+
+    static func joined(_ segments: [Text]) -> Text {
+        var runs = segments
         while runs.count > 1 {
             runs = stride(from: 0, to: runs.count, by: 2).map { index in
                 index + 1 < runs.count ? Text("\(runs[index])\(runs[index + 1])") : runs[index]
             }
         }
-        return runs[0]
+        return runs.first ?? Text(verbatim: "")
     }
 
-    private func stationary(_ line: String) -> some View {
-        Text(verbatim: line)
-            .font(Font(Self.typeface)).lineLimit(1)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    @ViewBuilder
+    private func stationary(_ line: String, length: CGFloat, inset: CGFloat = 0) -> some View {
+        Group {
+            if axis == .vertical {
+                LiveActivityVerticalStrip.stationary(line, viewport: length)
+            } else {
+                Text(verbatim: line)
+                    .font(Font(Self.typeface)).lineLimit(1)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            }
+        }
+        .offset(x: axis == .horizontal ? inset : 0, y: axis == .vertical ? inset : 0)
     }
 
     /// Each axis controls one digit in one clock field. Its advance is the
@@ -204,13 +246,13 @@ public struct LiveActivityMarquee: View {
         return CTFontCreateWithFontDescriptor(descriptor, period / 24, nil)
     }
 
-    private func speedStrip(unit: String, period: CGFloat, width: CGFloat, face: String, speed: CGFloat) -> some View {
+    private func speedStrip(unit: String, period: CGFloat, width: CGFloat, face: String, speed: CGFloat, previous: Int, inset: CGFloat) -> some View {
         let base = CTFontCreateWithName(face as CFString, 14, nil)
         let ruler = Font(Self.speedFont(base, period: period, pointsPerSecond: speed))
         // Each of the seven positional digits contributes less than one full
         // width. Eight copies keep the viewport filled at every combination.
-        let message = Self.messageStrip(String(repeating: unit, count: 8))
-        return clockStrip(systemClock, ruler: ruler, strip: message, prefixPeriods: 7, period: period, width: width)
+        let message = Self.messageStrip(String(repeating: unit, count: 8 + previous))
+        return clockStrip(systemClock, ruler: ruler, strip: message, prefixPeriods: 7 + previous, period: period, width: width, inset: inset)
     }
 
     private var systemClock: Text {
@@ -226,26 +268,26 @@ public struct LiveActivityMarquee: View {
 
     #if canImport(SwiftUICore)
     @available(iOS 18.0, *)
-    private func stopwatchStrip(_ strip: Text, period: CGFloat, width: CGFloat, face: String) -> some View {
+    private func stopwatchStrip(_ strip: Text, period: CGFloat, width: CGFloat, face: String, previous: Int, inset: CGFloat) -> some View {
         // The font shapes the final s.cc digits into one invisible prefix.
         // At this size its advance decreases by period/1,000 per centisecond.
         let rulerFont = Font.custom(face, fixedSize: period / 24)
         let clock = Text(.currentDate, format: .stopwatch(
             startingAt: startedAt, showsHours: false, maxFieldCount: 4, maxPrecision: .milliseconds(10)
         ))
-        return clockStrip(clock, ruler: rulerFont, strip: strip, prefixPeriods: 1, period: period, width: width)
+        return clockStrip(clock, ruler: rulerFont, strip: strip, prefixPeriods: 1 + previous, period: period, width: width, inset: inset)
     }
     #endif
 
     private func clockStrip(
-        _ clock: Text, ruler: Font, strip: Text, prefixPeriods: Int, period: CGFloat, width: CGFloat
+        _ clock: Text, ruler: Font, strip: Text, prefixPeriods: Int, period: CGFloat, width: CGFloat, inset: CGFloat
     ) -> some View {
         // Keep the invisible clock to the left of right-to-left messages.
         let directionMark = Text(verbatim: "\u{200E}").font(ruler)
         return Text("\(directionMark)\(clock.font(ruler))\(strip)")
             .lineLimit(1)
             .frame(width: CGFloat(2 * prefixPeriods + 1) * period + 2, height: Self.height, alignment: .leading)
-            .offset(x: -CGFloat(prefixPeriods) * period)
+            .offset(x: -CGFloat(prefixPeriods) * period + inset)
             .frame(width: width, height: Self.height, alignment: .leading)
             .clipped()
             .environment(\.locale, Locale(identifier: "en_US_POSIX"))
@@ -260,19 +302,19 @@ public struct LiveActivityMarquee: View {
     }
 
     @ViewBuilder
-    private func gateOrStationary(_ strip: Text, line: String, period: CGFloat, width: CGFloat) -> some View {
+    private func gateOrStationary(_ strip: Text, line: String, period: CGFloat, width: CGFloat, previous: Int, inset: CGFloat) -> some View {
         if let face = Self.gateFont {
-            gatedStrip(strip, period: period, width: width, face: face)
+            gatedStrip(strip, period: period, width: width, face: face, previous: previous, inset: inset)
         } else {
-            stationary(line)
+            stationary(line, length: width, inset: inset)
         }
     }
 
-    private func gatedStrip(_ strip: Text, period: CGFloat, width: CGFloat, face: String) -> some View {
+    private func gatedStrip(_ strip: Text, period: CGFloat, width: CGFloat, face: String, previous: Int, inset: CGFloat) -> some View {
         ZStack(alignment: .leading) {
             ForEach(0..<Self.gatePhases, id: \.self) { phase in
                 strip.lineLimit(1).fixedSize()
-                    .offset(x: -period * CGFloat(phase) / CGFloat(Self.gatePhases))
+                    .offset(x: inset - period * (CGFloat(previous) + CGFloat(phase) / CGFloat(Self.gatePhases)))
                     .frame(width: width, height: Self.height, alignment: .leading)
                     .clipped()
                     .mask { gate(for: phase, width: width, face: face) }

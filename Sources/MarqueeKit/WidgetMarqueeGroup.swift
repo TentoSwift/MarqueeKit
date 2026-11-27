@@ -12,16 +12,24 @@ public struct WidgetMarqueeGroup: Sendable {
         public let text: String
         public let pointsPerSecond: CGFloat?
         public let timing: WidgetMarqueeTiming?
-        public let viewportWidth: CGFloat?
+        /// The available width for horizontal scrolling or height for vertical scrolling.
+        public let viewportLength: CGFloat?
+        public var viewportWidth: CGFloat? { viewportLength }
 
         /// Supply the available text width when rows have different widths or speeds.
         /// A message that fits in this width does not extend the group's cycle.
         public init(_ text: String, pointsPerSecond: CGFloat? = nil, timing: WidgetMarqueeTiming? = nil,
                     viewportWidth: CGFloat? = nil) {
+            self.init(text, pointsPerSecond: pointsPerSecond, timing: timing, viewportLength: viewportWidth)
+        }
+
+        /// Exclude messages that fit along the group's scrolling axis.
+        public init(_ text: String, pointsPerSecond: CGFloat? = nil, timing: WidgetMarqueeTiming? = nil,
+                    viewportLength: CGFloat?) {
             self.text = text
             self.pointsPerSecond = pointsPerSecond
             self.timing = timing
-            self.viewportWidth = viewportWidth
+            self.viewportLength = viewportLength
         }
     }
 
@@ -29,6 +37,7 @@ public struct WidgetMarqueeGroup: Sendable {
     public struct Row: Identifiable, Sendable {
         /// The index in the supplied array. Duplicate messages remain separate rows.
         public let id: Int
+        public let axis: MarqueeAxis
         public let text: String
         public let pointsPerSecond: CGFloat
         public let timing: WidgetMarqueeTiming
@@ -96,15 +105,24 @@ public struct WidgetMarqueeGroup: Sendable {
     public init(_ texts: [String], startedAt: Date, pointsPerSecond: CGFloat,
                 timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
                 viewportWidth: CGFloat? = nil) {
-        self.init(items: texts.map { Item($0, viewportWidth: viewportWidth) }, startedAt: startedAt,
-                  pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops)
+        self.init(texts, startedAt: startedAt, pointsPerSecond: pointsPerSecond, timing: timing,
+                  pauseBetweenLoops: pauseBetweenLoops, axis: .horizontal, viewportLength: viewportWidth)
+    }
+
+    /// Creates synchronized rows or upright columns. Supply their available width or height
+    /// so a message that fits does not hold up the other members.
+    public init(_ texts: [String], startedAt: Date, pointsPerSecond: CGFloat,
+                timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0,
+                axis: MarqueeAxis, viewportLength: CGFloat? = nil) {
+        self.init(items: texts.map { Item($0, viewportLength: viewportLength) }, startedAt: startedAt,
+                  pointsPerSecond: pointsPerSecond, timing: timing, pauseBetweenLoops: pauseBetweenLoops, axis: axis)
     }
 
     /// Creates synchronized rows with per-item overrides and one pause after the last arrival.
     public init(items: [Item], startedAt: Date, pointsPerSecond: CGFloat,
-                timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0) {
+                timing: WidgetMarqueeTiming = .linear, pauseBetweenLoops: TimeInterval = 0, axis: MarqueeAxis = .horizontal) {
         self.startedAt = startedAt
-        let travel = items.map { Self.durations(for: $0, defaultSpeed: pointsPerSecond) }
+        let travel = items.map { Self.durations(for: $0, defaultSpeed: pointsPerSecond, axis: axis) }
         let widgetDurations = travel.map(\.widget)
         let liveDurations = travel.map(\.live)
         let timings = items.map { $0.timing ?? timing }
@@ -115,7 +133,7 @@ public struct WidgetMarqueeGroup: Sendable {
         let liveCycle = Self.cycle(longest: liveDurations.max() ?? 0, pause: pause)
         self.rows = items.indices.map { index in
             let item = items[index]
-            return Row(id: index, text: item.text, pointsPerSecond: item.pointsPerSecond ?? pointsPerSecond,
+            return Row(id: index, axis: axis, text: item.text, pointsPerSecond: item.pointsPerSecond ?? pointsPerSecond,
                        timing: timings[index], startedAt: startedAt,
                        widgetTravelDuration: travel[index].widget, widgetCycleDuration: widgetCycle,
                        widgetMotion: timings[index] == .easeInOut ? widgetMotions[travel[index].widget] : nil,
@@ -124,20 +142,22 @@ public struct WidgetMarqueeGroup: Sendable {
         }
     }
 
-    private static func durations(for item: Item, defaultSpeed: CGFloat) -> (widget: TimeInterval, live: TimeInterval) {
+    private static func durations(for item: Item, defaultSpeed: CGFloat, axis: MarqueeAxis) -> (widget: TimeInterval, live: TimeInterval) {
         let speed = item.pointsPerSecond ?? defaultSpeed
         guard speed > 0, speed.isFinite else { return (0, 0) }
         let line = WidgetMarqueeMetrics.line(from: item.text)
         guard line.contains(where: { !$0.isWhitespace }) else { return (0, 0) }
-        let textWidth = WidgetMarqueeMetrics.textWidth(for: line)
-        if let width = item.viewportWidth {
-            guard width > 0, textWidth > width else { return (0, 0) }
+        let textLength = WidgetMarqueeMetrics.contentLength(for: line, axis: axis)
+        if let viewport = item.viewportLength {
+            guard viewport > 0, textLength > viewport else { return (0, 0) }
         }
 
-        let widget = Double((textWidth + WidgetMarqueeMetrics.gap) / speed)
-        // The Live Activity renderer uses four measured spaces between copies and
-        // shows oversized ActivityKit messages as stationary text.
-        let live = item.text.utf8.count <= 4096 ? Double(WidgetMarqueeMetrics.liveRepeatWidth(for: line) / speed) : 0
+        let period = textLength + WidgetMarqueeMetrics.gap
+        let widget = Double(period / speed)
+        let liveFits = item.text.utf8.count <= 4096 && (axis != .vertical || LiveActivityVerticalStrip.supportsAnimation(line))
+        // The horizontal Live Activity strip uses four measured spaces between copies.
+        let livePeriod = axis == .vertical ? period : WidgetMarqueeMetrics.liveRepeatWidth(for: line)
+        let live = liveFits ? Double(livePeriod / speed) : 0
         return (widget.isFinite ? widget : 0, live.isFinite ? live : 0)
     }
 
