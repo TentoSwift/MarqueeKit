@@ -24,6 +24,11 @@ public struct WidgetMarquee: View {
         self.schedule = schedule ?? WidgetMarqueeSchedule(for: text)
     }
 
+    /// Displays a group member in an app. The next pass begins with the other members.
+    public init(_ row: WidgetMarqueeGroup.Row) {
+        self.init(row.text, schedule: WidgetMarqueeSchedule(row))
+    }
+
     /// Sets the average travel speed, the timing within each pass, and an optional pause between passes.
     public init(
         _ text: String, pointsPerSecond: CGFloat? = nil,
@@ -185,5 +190,9 @@ enum WidgetMarqueeMetrics {
 
     static func repeatWidth(for line: String) -> CGFloat {
         textWidth(for: line) + gap
+    }
+
+    static func liveRepeatWidth(for line: String) -> CGFloat {
+        ((line + "    ") as NSString).size(withAttributes: [.font: font]).width
     }
 }

@@ -4,13 +4,16 @@ import XCTest
 @testable import WidgetMarquee
 
 final class LiveActivitySpeedTests: XCTestCase {
-    @MainActor
-    private func speedFont(period: CGFloat, speed: CGFloat) throws -> CTFont {
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "WidgetMarqueeSpeed", withExtension: "ttf"))
+    private func bundledFont(_ name: String) throws -> CTFont {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "ttf"))
         let provider = try XCTUnwrap(CGDataProvider(url: url as CFURL))
         let graphics = try XCTUnwrap(CGFont(provider))
-        let base = CTFontCreateWithGraphicsFont(graphics, 14, nil, nil)
-        return LiveActivityMarquee.speedFont(base, period: period, pointsPerSecond: speed)
+        return CTFontCreateWithGraphicsFont(graphics, 14, nil, nil)
+    }
+
+    @MainActor
+    private func speedFont(period: CGFloat, speed: CGFloat) throws -> CTFont {
+        LiveActivityMarquee.speedFont(try bundledFont("WidgetMarqueeSpeed"), period: period, pointsPerSecond: speed)
     }
 
     private func advance(_ stamp: String, font: CTFont) -> CGFloat {
@@ -64,10 +67,7 @@ final class LiveActivitySpeedTests: XCTestCase {
     }
 
     func testEasedAndLinearPassesHoldAtTheHeadAndRestartAcrossClockCarries() throws {
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "WidgetMarqueePlayback", withExtension: "ttf"))
-        let provider = try XCTUnwrap(CGDataProvider(url: url as CFURL))
-        let graphics = try XCTUnwrap(CGFont(provider))
-        let base = CTFontCreateWithGraphicsFont(graphics, 14, nil, nil)
+        let base = try bundledFont("WidgetMarqueePlayback")
         let period: CGFloat = 505
         let travel = 7.25
         let pause = 2.75
@@ -87,6 +87,43 @@ final class LiveActivitySpeedTests: XCTestCase {
                 let width = advance(stamp, font: font)
                 XCTAssertEqual(width, expected, accuracy: 0.6, stamp)
                 if local > travel { XCTAssertEqual(width, 0, accuracy: 0.001, stamp) }
+            }
+        }
+    }
+
+    @MainActor
+    func testGroupFontsHoldShortRowThenRestartTogether() throws {
+        let base = try bundledFont("WidgetMarqueePlayback")
+        let texts = ["東京から 京都へ", "東京から 名古屋、京都を経由して 大阪へ 🚄"]
+        let font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        let periods = texts.map { (($0 + "    ") as NSString).size(withAttributes: [.font: font]).width }
+        let start = Date(timeIntervalSinceReferenceDate: 173.25)
+        let group = WidgetMarqueeGroup(items: [
+            .init(texts[0], pointsPerSecond: periods[0] / 3, viewportWidth: 50),
+            .init(texts[1], pointsPerSecond: periods[1] / 5, timing: .easeInOut, viewportWidth: 50)
+        ], startedAt: start, pointsPerSecond: 40, pauseBetweenLoops: 2.5)
+
+        for (index, row) in group.rows.enumerated() {
+            _ = LiveActivityMarquee(row)
+            let travel = index == 0 ? 3.0 : 5.0
+            XCTAssertEqual(row.startedAt, start)
+            XCTAssertEqual(row.liveTravelDuration, travel, accuracy: 1e-9)
+            XCTAssertEqual(row.liveCycleDuration, 7.5, accuracy: 1e-9)
+            let ruler = WidgetMarqueePlayback.font(base, period: periods[index], travelDuration: row.liveTravelDuration,
+                                                    pause: 0, timing: row.timing, cycleDuration: row.liveCycleDuration)
+            // 3.50 and 4.50: only the long row moves. 5.50 and 7.49: both rest.
+            // 7.75 and 60.25: both have restarted a quarter of a second ago.
+            let stamps: [(String, Double)] = [
+                ("0:00.50", 0.5), ("0:03.50", 3.5), ("0:04.50", 4.5),
+                ("0:05.50", 5.5), ("0:07.49", 7.49), ("0:07.75", 0.25),
+                ("0:14.99", 7.49), ("1:00.25", 0.25)
+            ]
+            for (stamp, elapsed) in stamps {
+                let fraction = min(1, elapsed / travel)
+                let expected = periods[index] * (1 - row.timing.progress(fraction))
+                let actual = advance(stamp, font: ruler)
+                XCTAssertEqual(actual, expected, accuracy: 0.5, "row \(index) at \(stamp)")
+                if elapsed > travel { XCTAssertEqual(actual, 0, accuracy: 0.001) }
             }
         }
     }

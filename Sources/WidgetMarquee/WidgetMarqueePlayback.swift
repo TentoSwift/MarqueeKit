@@ -10,8 +10,9 @@ enum WidgetMarqueePlayback {
     private static let phaseCount = 4096
 
     static func font(_ base: CTFont, period: CGFloat, travelDuration: TimeInterval,
-                     pause: TimeInterval, timing: WidgetMarqueeTiming) -> CTFont {
-        let cycle = travelDuration + pause
+                     pause: TimeInterval, timing: WidgetMarqueeTiming, cycleDuration: TimeInterval? = nil) -> CTFont {
+        // Grouped rows use the very same cycle when quantizing the clock digits.
+        let cycle = cycleDuration ?? (travelDuration + pause)
         let movingFraction = cycle.isFinite
             ? travelDuration / cycle
             : (travelDuration / 2) / (travelDuration / 2 + pause / 2)

@@ -38,3 +38,35 @@ public struct WidgetMarqueeEntry: TimelineEntry, Sendable {
         self.init(text, date: date, schedule: schedule)
     }
 }
+
+/// One WidgetKit entry containing all rows of a synchronized marquee group, in input order.
+public struct WidgetMarqueeGroupEntry: TimelineEntry, Sendable {
+    public let date: Date
+    public let rows: [WidgetMarqueeEntry]
+
+    /// Creates a placeholder or snapshot for the group at the supplied date.
+    public init(_ group: WidgetMarqueeGroup, date: Date = .now) {
+        self.date = date
+        self.rows = group.rows.map { WidgetMarqueeEntry($0.text, date: date, schedule: WidgetMarqueeSchedule($0)) }
+    }
+
+    fileprivate init(date: Date, rows: [WidgetMarqueeEntry]) {
+        self.date = date
+        self.rows = rows
+    }
+}
+
+extension WidgetMarqueeGroup {
+    /// Builds one timeline for the widget. All rows receive the same entry dates,
+    /// including when a moving member finishes and when the whole group restarts.
+    public func timeline(from date: Date = .now) -> Timeline<WidgetMarqueeGroupEntry> {
+        let schedules = rows.map(WidgetMarqueeSchedule.init)
+        return WidgetMarqueeSchedule.timeline(for: schedules, from: date) { date, next in
+            let entries = zip(rows, schedules).map { row, schedule in
+                WidgetMarqueeEntry(row.text, date: date, schedule: schedule,
+                                   nextDate: schedule.passDuration == 0 ? nil : next)
+            }
+            return WidgetMarqueeGroupEntry(date: date, rows: entries)
+        }
+    }
+}

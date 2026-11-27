@@ -25,11 +25,18 @@ struct MarqueeLiveActivity: Widget {
         }
     }
 
+    @ViewBuilder
     private func marquee(_ context: ActivityViewContext<MarqueeActivityAttributes>) -> some View {
-        LiveActivityMarquee(
-            context.state.text, startedAt: context.attributes.startedAt,
-            pointsPerSecond: context.state.pointsPerSecond.map { CGFloat($0) },
-            timing: .easeInOut, pauseBetweenLoops: 2
-        )
+        let speed = context.state.pointsPerSecond.map { CGFloat($0) }
+        if let second = context.state.secondText, !second.isEmpty {
+            let group = WidgetMarqueeGroup([context.state.text, second], startedAt: context.attributes.startedAt,
+                                          pointsPerSecond: speed ?? 40, timing: .easeInOut, pauseBetweenLoops: 2)
+            VStack(alignment: .leading) {
+                ForEach(group.rows) { row in LiveActivityMarquee(row) }
+            }
+        } else {
+            LiveActivityMarquee(context.state.text, startedAt: context.attributes.startedAt,
+                               pointsPerSecond: speed, timing: .easeInOut, pauseBetweenLoops: 2)
+        }
     }
 }

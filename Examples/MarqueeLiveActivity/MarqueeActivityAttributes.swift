@@ -9,6 +9,7 @@ struct MarqueeActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         let text: String
         var pointsPerSecond: Double?
+        var secondText: String?
     }
 
     enum ContentError: LocalizedError {
@@ -19,8 +20,8 @@ struct MarqueeActivityAttributes: ActivityAttributes {
         }
     }
 
-    func content(for text: String, pointsPerSecond: Double? = nil) throws -> ActivityContent<ContentState> {
-        let state = ContentState(text: text, pointsPerSecond: pointsPerSecond)
+    func content(for text: String, pointsPerSecond: Double? = nil, secondText: String? = nil) throws -> ActivityContent<ContentState> {
+        let state = ContentState(text: text, pointsPerSecond: pointsPerSecond, secondText: secondText)
         let encoder = JSONEncoder()
         let attributeBytes = try encoder.encode(self).count
         let stateBytes = try encoder.encode(state).count

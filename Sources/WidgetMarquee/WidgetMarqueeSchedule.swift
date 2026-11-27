@@ -20,6 +20,7 @@ public struct WidgetMarqueeSchedule: Sendable {
 
     // Legacy linear steps use nil. A zero duration represents stationary text.
     let passDuration: TimeInterval?
+    private var groupCycle: (start: Date, duration: TimeInterval)?
 
     /// Creates a two-second schedule with the specified number of positions per pass.
     ///
@@ -52,11 +53,21 @@ public struct WidgetMarqueeSchedule: Sendable {
             )
             return
         }
-        self.timing = timing
-        self.pauseBetweenLoops = Self.validPause(pauseBetweenLoops)
         let width = WidgetMarqueeMetrics.repeatWidth(for: WidgetMarqueeMetrics.line(from: text))
-        let duration = Double(width / pointsPerSecond)
-        guard pointsPerSecond.isFinite, pointsPerSecond > 0, duration.isFinite, duration > 0 else {
+        let duration = pointsPerSecond.isFinite && pointsPerSecond > 0 ? Double(width / pointsPerSecond) : 0
+        self.init(travel: duration, timing: timing, pause: pauseBetweenLoops)
+    }
+
+    init(_ row: WidgetMarqueeGroup.Row) {
+        self.init(travel: row.widgetTravelDuration, timing: row.timing,
+                  pause: row.widgetCycleDuration - row.widgetTravelDuration)
+        groupCycle = (row.startedAt, row.widgetCycleDuration)
+    }
+
+    private init(travel duration: TimeInterval, timing: WidgetMarqueeTiming, pause: TimeInterval) {
+        self.timing = timing
+        self.pauseBetweenLoops = Self.validPause(pause)
+        guard duration.isFinite, duration > 0 else {
             self.passDuration = 0
             self.stepsPerPass = 1
             self.secondsPerStep = 2
@@ -96,34 +107,53 @@ public struct WidgetMarqueeSchedule: Sendable {
     func timeline<Entry: TimelineEntry>(
         from date: Date, entryWithNextDate: (Date, Date?) -> Entry
     ) -> Timeline<Entry> {
-        if passDuration == 0 {
+        Self.timeline(for: [self], from: date) { date, next in
+            entryWithNextDate(date, passDuration == nil ? nil : next)
+        }
+    }
+
+    static func timeline<Entry: TimelineEntry>(
+        for schedules: [Self], from date: Date, entryWithNextDate: (Date, Date?) -> Entry
+    ) -> Timeline<Entry> {
+        let moving = schedules.filter { $0.passDuration != 0 }
+        guard let step = moving.map(\.secondsPerStep).min() else {
             return Timeline(entries: [entryWithNextDate(date, nil)], policy: .never)
         }
-        let start = Date(timeIntervalSinceReferenceDate: absoluteStep(at: date) * secondsPerStep)
-        var dates = (0...150).map { start.addingTimeInterval(Double($0) * secondsPerStep) }
-        // Include the actual stop and restart when a pause falls between grid entries.
-        // At sub-sample cycle lengths WidgetKit can only present sampled positions.
-        if pauseBetweenLoops > 0, let travel = passDuration, cycleDuration >= secondsPerStep {
-            let elapsed = elapsedInCycle(at: start)
-            let untilRestart = cycleDuration - elapsed
-            let untilStop = elapsed < travel ? travel - elapsed : untilRestart + travel
-            let end = dates[150]
-            for interval in [untilStop, untilRestart] {
-                var boundary = start.addingTimeInterval(interval)
-                while boundary < end {
-                    dates.append(boundary)
-                    let next = boundary.addingTimeInterval(cycleDuration)
-                    guard next > boundary else { break }
-                    boundary = next
-                }
-            }
-            dates = Array(Set(dates).sorted().prefix(151))
+        let start = Date(timeIntervalSinceReferenceDate: floor(date.timeIntervalSinceReferenceDate / step) * step)
+        let end = start.addingTimeInterval(150 * step)
+        var samples = Set((0...150).map { start.addingTimeInterval(Double($0) * step) })
+        for schedule in moving {
+            schedule.insertBoundaries(in: start..<end, minimumInterval: step, into: &samples)
         }
+        let dates = Array(samples.sorted().prefix(151))
         let entries = dates.indices.map { index in
-            let next = passDuration != nil && index + 1 < dates.count ? dates[index + 1] : nil
+            let next = index + 1 < dates.count ? dates[index + 1] : nil
             return entryWithNextDate(dates[index], next)
         }
-        return Timeline(entries: entries, policy: .after(dates[120]))
+        return Timeline(entries: entries, policy: .after(dates[min(120, dates.count - 1)]))
+    }
+
+    private func insertBoundaries(in range: Range<Date>, minimumInterval: TimeInterval, into dates: inout Set<Date>) {
+        guard let travel = passDuration, groupCycle != nil || pauseBetweenLoops > 0 else { return }
+        let origin = groupCycle?.start ?? Date(timeIntervalSinceReferenceDate: 0)
+        if groupCycle != nil, range.contains(origin) { dates.insert(origin) }
+        guard cycleDuration >= minimumInterval else { return }
+
+        // Derive each stop/restart from the epoch so overlapping reloads
+        // publish the same dates, even when a pass lasts a fractional second.
+        var lap = floor(range.lowerBound.timeIntervalSince(origin) / cycleDuration)
+        if groupCycle != nil { lap = max(0, lap) }
+        while lap.isFinite {
+            let lapStart = origin.addingTimeInterval(lap * cycleDuration)
+            guard lapStart < range.upperBound else { break }
+            if range.contains(lapStart) { dates.insert(lapStart) }
+            if pauseBetweenLoops > 0 {
+                let stop = lapStart.addingTimeInterval(travel)
+                if range.contains(stop) { dates.insert(stop) }
+            }
+            guard lap + 1 > lap else { break }
+            lap += 1
+        }
     }
 
     // A standalone dated view has no following entry. Use the actual interval
@@ -165,7 +195,7 @@ public struct WidgetMarqueeSchedule: Sendable {
     }
 
     var cycleDuration: TimeInterval {
-        min(.greatestFiniteMagnitude, (passDuration ?? Double(stepsPerPass) * secondsPerStep) + pauseBetweenLoops)
+        groupCycle?.duration ?? min(.greatestFiniteMagnitude, (passDuration ?? Double(stepsPerPass) * secondsPerStep) + pauseBetweenLoops)
     }
 
     func elapsedInCycle(at date: Date) -> TimeInterval {
@@ -176,13 +206,18 @@ public struct WidgetMarqueeSchedule: Sendable {
     private func cycleCoordinate(at date: Date) -> Double {
         let cycle = cycleDuration
         guard cycle > 0 else { return 0 }
-        return date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3 * cycle) / cycle
+        return clockTime(at: date).truncatingRemainder(dividingBy: 3 * cycle) / cycle
+    }
+
+    private func clockTime(at date: Date) -> TimeInterval {
+        guard let groupCycle else { return date.timeIntervalSinceReferenceDate }
+        return max(0, date.timeIntervalSince(groupCycle.start))
     }
 
     func copyCycle(at date: Date, copy: Int) -> Double {
         if let duration = passDuration {
             guard duration > 0 else { return 0 }
-            var lap = floor(date.timeIntervalSinceReferenceDate / cycleDuration)
+            var lap = floor(clockTime(at: date) / cycleDuration)
             if pauseBetweenLoops > 0 && elapsedInCycle(at: date) >= duration { lap += 1 }
             return lap.isFinite ? floor((lap + Double(copy)) / 3) : 0
         }

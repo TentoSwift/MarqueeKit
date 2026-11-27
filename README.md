@@ -6,12 +6,12 @@ iOSアプリ、ホーム画面Widget、Live Activityで、1行に収まらない
 
 ## インストール
 
-Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.3.0` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
+Xcodeの **File → Add Package Dependencies…** で `https://github.com/TentoSwift/WidgetMarquee.git` を指定し、バージョン `1.4.0` 以降を選びます。製品 `WidgetMarquee` は、表示するアプリまたはWidget Extensionのターゲットに追加します。
 
 `Package.swift` から追加する場合は、`dependencies` に次の行を指定します。
 
 ```swift
-.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.3.0")
+.package(url: "https://github.com/TentoSwift/WidgetMarquee.git", from: "1.4.0")
 ```
 
 ## SwiftUIアプリで使う
@@ -50,6 +50,42 @@ LiveActivityMarquee(text, startedAt: startedAt, pointsPerSecond: 40,
 iOS 27.2シミュレータのLive Activityでは、同じ文章に30、60 pt/秒を指定して、約30、60 pt/秒で移動したことを確認しました。90 pt/秒・2秒待機の設定では、等速の行は約5.7秒で移動し、約2秒静止しました。緩急を付けた行は同じ周期で、中央で約135 pt/秒まで加速しました。[加減速と2秒待機の録画（MP4）](https://github.com/TentoSwift/WidgetMarquee/releases/download/1.3.0/live-activity-ease-and-pause.mp4)
 
 各引数は個別に省略できます。既定は等速（`.linear`）で、周回の待ち時間は0秒です。速度を省略するとLive Activityは10秒で一周し、SwiftUIアプリとホーム画面Widgetは文章の長さに応じた従来の周期を使います。たとえばLive Activityに `pauseBetweenLoops: 2` だけを渡すと、10秒かけて移動して2秒待ちます。速度0、負の速度、非有限の速度では文章が静止します。負の待ち時間や非有限の待ち時間は0秒として扱います。
+
+## 複数の行が終わってから一緒に再開する
+
+`WidgetMarqueeGroup` に同時に再開したい文章をまとめます。各行は自分の速度で一周し、先に終わった行は先頭位置で待ちます。最後の行が戻った時点から `pauseBetweenLoops` 秒後に全行が再開します。待ち時間が0なら最後の行が戻った時点で再開します。[長さの違う2行を同期させた録画（MP4）](https://github.com/TentoSwift/WidgetMarquee/releases/download/1.4.0/synchronized-marquees.mp4)
+
+```swift
+let group = WidgetMarqueeGroup(
+    [title, subtitle], startedAt: context.attributes.startedAt,
+    pointsPerSecond: 40, timing: .easeInOut, pauseBetweenLoops: 2
+)
+
+VStack(alignment: .leading) {
+    ForEach(group.rows) { row in LiveActivityMarquee(row) }
+}
+```
+
+SwiftUIアプリでは同じ `group.rows` を `WidgetMarquee(row)` に渡します。`startedAt` にはアプリの状態に保存した開始日時、またはLive Activityの開始属性を使い、ビューを描き直しても同じ日時を渡してください。別々に周回させる場合は、従来どおり文章を各ビューに直接渡します。
+
+行ごとに速度や表示幅が異なる場合は `items:` を使えます。`viewportWidth` にはラベルや余白を除いた本文の実際の幅を渡すと、幅に収まる行を共通周期の計算から除外できます。速度0の行もほかの行を待たせません。
+
+```swift
+let group = WidgetMarqueeGroup(items: [
+    .init(title, pointsPerSecond: 30, viewportWidth: titleWidth),
+    .init(subtitle, viewportWidth: subtitleWidth)
+], startedAt: startedAt, pointsPerSecond: 50, pauseBetweenLoops: 2)
+```
+
+ホーム画面Widgetでは、プロバイダのエントリ型を `WidgetMarqueeGroupEntry` にし、`timeline` で `group.timeline()` を返します。`placeholder` と `snapshot` には `WidgetMarqueeGroupEntry(group)` を使います。同じエントリに全行の表示位置が入るので、Widgetのビューで次のように並べられます。再読み込み時にも同じ開始日時を使います。
+
+```swift
+VStack(alignment: .leading) {
+    ForEach(entry.rows.indices, id: \.self) { index in
+        WidgetMarquee(entry.rows[index])
+    }
+}
+```
 
 ## ホーム画面Widgetで使う
 
@@ -100,7 +136,7 @@ iPhone 17 Proシミュレータ（iOS 27.2）で日本語の文章を表示し�
 
 ![ロック画面のLive Activityで「自動」行の日本語が左へ流れて一周する様子](Documentation/live-activity-smooth.gif)
 
-AppleのFrameworks Engineerは、タイマーとカスタムフォントを使うアニメーションをサポート対象外としており、電池や性能への影響を指摘しています。実際の更新頻度はOSや表示状態に左右されます。Live Activityで加減速や待機を指定すると一周を4,096段階で表すため、文章や待ち時間が非常に長いと、文字送りの刻みが目立つことがあります。[Appleの技術者による説明](https://developer.apple.com/forums/thread/757696)
+AppleのFrameworks Engineerは、タイマーとカスタムフォントを使うアニメーションをサポート対象外としており、電池や性能への影響を指摘しています。実際の更新頻度はOSや表示状態に左右されます。Live Activityで加減速、待機、複数行の同期を指定すると一周を4,096段階で表すため、文章や待ち時間が非常に長いと、文字送りの刻みが目立つことがあります。[Appleの技術者による説明](https://developer.apple.com/forums/thread/757696)
 
 ### サンプルを実行する
 

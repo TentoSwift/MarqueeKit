@@ -16,11 +16,12 @@ public struct LiveActivityMarquee: View {
     private let pointsPerSecond: CGFloat?
     private let timing: WidgetMarqueeTiming
     private let pauseBetweenLoops: TimeInterval
+    private let sharedCycle: (travel: TimeInterval, duration: TimeInterval)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var reducedLuminance
 
-    private static let typeface = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+    private static let typeface = WidgetMarqueeMetrics.font
     private static let height: CGFloat = 23
     private static let gatePhases = 10
 
@@ -73,6 +74,18 @@ public struct LiveActivityMarquee: View {
         self.pointsPerSecond = pointsPerSecond
         self.timing = timing
         self.pauseBetweenLoops = pauseBetweenLoops.isFinite && pauseBetweenLoops > 0 ? pauseBetweenLoops : 0
+        self.sharedCycle = nil
+    }
+
+    /// Displays one row of a group. Every row starts from the group's start date
+    /// and rests at the head of its message until the group starts its next pass.
+    public init(_ row: WidgetMarqueeGroup.Row) {
+        self.text = row.text
+        self.startedAt = row.startedAt
+        self.pointsPerSecond = row.pointsPerSecond
+        self.timing = row.timing
+        self.pauseBetweenLoops = 0
+        self.sharedCycle = (row.liveTravelDuration, row.liveCycleDuration)
     }
 
     public var body: some View {
@@ -82,23 +95,23 @@ public struct LiveActivityMarquee: View {
             if text.utf8.count > 4_096 {
                 stationary(text)
             } else {
-                let line = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).joined(separator: " ")
-                let attributes = [NSAttributedString.Key.font: Self.typeface]
-                let lineWidth = ceil((line as NSString).size(withAttributes: attributes).width)
+                let line = WidgetMarqueeMetrics.line(from: text)
+                let lineWidth = WidgetMarqueeMetrics.textWidth(for: line)
                 let width = viewport.size.width
 
                 if width > 0, lineWidth > width, !reduceMotion, !reducedLuminance,
                    pointsPerSecond.map({ $0.isFinite && $0 > 0 }) ?? true {
                     let unit = line + "    "
-                    let period = (unit as NSString).size(withAttributes: attributes).width
+                    let period = WidgetMarqueeMetrics.liveRepeatWidth(for: line)
                     // Large messages use the two-copy clock to keep the serialized
                     // view within the WidgetKit host's archive budget.
-                    if timing != .linear || pauseBetweenLoops > 0 || line.utf8.count > 1_024 {
-                        let travel = pointsPerSecond.map { Double(period / $0) } ?? 10
+                    if sharedCycle != nil || timing != .linear || pauseBetweenLoops > 0 || line.utf8.count > 1_024 {
+                        let travel = sharedCycle?.travel ?? pointsPerSecond.map { Double(period / $0) } ?? 10
                         if travel.isFinite, travel > 0, let face = Self.playbackFace {
                             let base = CTFontCreateWithName(face as CFString, 14, nil)
                             let ruler = Font(WidgetMarqueePlayback.font(
-                                base, period: period, travelDuration: travel, pause: pauseBetweenLoops, timing: timing
+                                base, period: period, travelDuration: travel, pause: pauseBetweenLoops,
+                                timing: timing, cycleDuration: sharedCycle?.duration
                             ))
                             let strip = Self.messageStrip(unit + line)
                             clockStrip(systemClock, ruler: ruler, strip: strip, prefixPeriods: 1, period: period, width: width)
